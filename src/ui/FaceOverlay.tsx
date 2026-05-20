@@ -1,11 +1,12 @@
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 type FaceOverlayProps = {
   active: boolean;
+  showCheck: boolean;
   verified: boolean;
 };
 
-export function FaceOverlay({ active, verified }: FaceOverlayProps) {
+export function FaceOverlay({ active, showCheck, verified }: FaceOverlayProps) {
   return (
     <View pointerEvents="none" style={styles.container}>
       <View
@@ -19,6 +20,11 @@ export function FaceOverlay({ active, verified }: FaceOverlayProps) {
         <View style={[styles.corner, styles.topRight]} />
         <View style={[styles.corner, styles.bottomLeft]} />
         <View style={[styles.corner, styles.bottomRight]} />
+        {showCheck || verified ? (
+          <View style={styles.checkCircle}>
+            <Text style={styles.checkText}>✓</Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -32,9 +38,8 @@ const styles = StyleSheet.create({
   },
   frame: {
     alignItems: 'center',
-    aspectRatio: 1,
     borderColor: '#FFB43B',
-    borderRadius: 220,
+    borderRadius: 132,
     borderWidth: 2,
     justifyContent: 'center',
     height: '100%',
@@ -51,6 +56,21 @@ const styles = StyleSheet.create({
     height: 0,
     position: 'absolute',
     width: 0,
+  },
+  checkCircle: {
+    alignItems: 'center',
+    backgroundColor: '#2FA84F',
+    borderRadius: 34,
+    height: 68,
+    justifyContent: 'center',
+    width: 68,
+  },
+  checkText: {
+    color: '#FFFFFF',
+    fontSize: 42,
+    fontWeight: '900',
+    lineHeight: 48,
+    textAlign: 'center',
   },
   topLeft: {
     borderLeftWidth: 4,

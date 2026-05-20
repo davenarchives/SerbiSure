@@ -1,20 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { Camera as VisionCamera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
-import { Camera as FaceDetectorCamera, type Face } from 'react-native-vision-camera-face-detector';
+import {
+  Delegate,
+  RunningMode,
+  useFaceLandmarkDetection,
+  type DetectionError,
+  type Dims,
+  type FaceLandmarkDetectionResultBundle,
+} from 'react-native-mediapipe';
 
-import { faceDetectorToLandmarkFrame } from '../face/mediapipeFaceTracker';
+import { faceLandmarkerResultToLandmarkFrame } from '../face/mediapipeFaceTracker';
 import type { LandmarkFrame } from '../face/types';
 
 type FaceCameraProps = {
   onLandmarks: (frame: LandmarkFrame) => void;
 };
 
-export function FaceCamera({ onLandmarks }: FaceCameraProps) {
+export type FaceCameraHandle = {
+  captureSelfie: () => Promise<string | null>;
+};
+
+export const FaceCamera = forwardRef<FaceCameraHandle, FaceCameraProps>(function FaceCamera({ onLandmarks }, ref) {
   const cameraRef = useRef<VisionCamera | null>(null);
   const device = useCameraDevice('front');
   const { hasPermission, requestPermission } = useCameraPermission();
-  const [previewSize, setPreviewSize] = useState({ width: 1, height: 1 });
+  const [detectorError, setDetectorError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasPermission) {
@@ -22,24 +33,60 @@ export function FaceCamera({ onLandmarks }: FaceCameraProps) {
     }
   }, [hasPermission, requestPermission]);
 
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    setPreviewSize({
-      width: Math.max(width, 1),
-      height: Math.max(height, 1),
-    });
+  const handleResults = useCallback(
+    (resultBundle: FaceLandmarkDetectionResultBundle, viewSize: Dims, mirrored: boolean) => {
+      setDetectorError(null);
+      onLandmarks(
+        faceLandmarkerResultToLandmarkFrame(
+          resultBundle,
+          Math.max(viewSize.width, 1),
+          Math.max(viewSize.height, 1),
+          mirrored,
+        ),
+      );
+    },
+    [onLandmarks],
+  );
+
+  const handleError = useCallback((error: DetectionError) => {
+    setDetectorError(error.message);
   }, []);
 
-  const handleFacesDetected = useCallback(
-    (faces: Face[]) => {
-      const face = faces[0];
-      if (!face) {
-        return;
-      }
-
-      onLandmarks(faceDetectorToLandmarkFrame(face, previewSize.width, previewSize.height));
+  const faceLandmarkDetection = useFaceLandmarkDetection(
+    handleResults,
+    handleError,
+    RunningMode.LIVE_STREAM,
+    'face_landmarker.task',
+    {
+      delegate: Delegate.CPU,
+      minFaceDetectionConfidence: 0.5,
+      minFacePresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+      mirrorMode: 'mirror-front-only',
+      numFaces: 1,
     },
-    [onLandmarks, previewSize.height, previewSize.width],
+  );
+
+  useEffect(() => {
+    faceLandmarkDetection.cameraDeviceChangeHandler(device);
+  }, [device, faceLandmarkDetection]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      async captureSelfie() {
+        if (!cameraRef.current) {
+          return null;
+        }
+
+        const photo = await cameraRef.current.takePhoto({
+          flash: 'off',
+        });
+
+        return photo.path;
+      },
+    }),
+    [],
   );
 
   if (!hasPermission) {
@@ -59,28 +106,26 @@ export function FaceCamera({ onLandmarks }: FaceCameraProps) {
   }
 
   return (
-    <View style={StyleSheet.absoluteFill} onLayout={handleLayout}>
-      <FaceDetectorCamera
+    <View style={StyleSheet.absoluteFill}>
+      <VisionCamera
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
         device={device}
         isActive
-        faceDetectionCallback={handleFacesDetected}
-        faceDetectionOptions={{
-          autoMode: true,
-          cameraFacing: 'front',
-          classificationMode: 'all',
-          contourMode: 'all',
-          landmarkMode: 'all',
-          minFaceSize: 0.15,
-          performanceMode: 'fast',
-          windowHeight: previewSize.height,
-          windowWidth: previewSize.width,
-        }}
+        pixelFormat="rgb"
+        photo
+        frameProcessor={faceLandmarkDetection.frameProcessor}
+        onLayout={faceLandmarkDetection.cameraViewLayoutChangeHandler}
+        onOutputOrientationChanged={faceLandmarkDetection.cameraOrientationChangedHandler}
       />
+      {detectorError ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{detectorError}</Text>
+        </View>
+      ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   fallback: {
@@ -94,6 +139,22 @@ const styles = StyleSheet.create({
     color: '#111111',
     fontSize: 15,
     fontWeight: '700',
+    textAlign: 'center',
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(17, 17, 17, 0.78)',
+    borderRadius: 6,
+    left: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    position: 'absolute',
+    right: 16,
+    top: 48,
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
     textAlign: 'center',
   },
 });

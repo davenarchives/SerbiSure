@@ -2,7 +2,7 @@ import { StyleSheet, View } from 'react-native';
 
 import type { LivenessStep } from '../liveness/livenessMachine';
 
-const visibleSteps: LivenessStep[] = ['face', 'blink', 'turnLeft', 'still'];
+const visibleSteps: LivenessStep[] = ['face', 'turnLeft', 'turnRight'];
 
 type StepProgressProps = {
   currentStep: LivenessStep;
@@ -13,11 +13,8 @@ export function StepProgress({ currentStep, completedSteps }: StepProgressProps)
   return (
     <View style={styles.container}>
       {visibleSteps.map((step) => {
-        const completed =
-          completedSteps.includes(step) ||
-          (step === 'turnLeft' && completedSteps.includes('turnRight')) ||
-          currentStep === 'verified';
-        const active = currentStep === step || (step === 'turnLeft' && currentStep === 'turnRight');
+        const completed = completedSteps.includes(step) || currentStep === 'verified';
+        const active = currentStep === step;
 
         return <View key={step} style={[styles.bar, (active || completed) && styles.barActive]} />;
       })}
@@ -28,9 +25,9 @@ export function StepProgress({ currentStep, completedSteps }: StepProgressProps)
 const styles = StyleSheet.create({
   bar: {
     backgroundColor: '#F0D9B2',
-    borderRadius: 2,
-    height: 4,
-    width: 24,
+    borderRadius: 1,
+    height: 2,
+    width: 16,
   },
   barActive: {
     backgroundColor: '#FFB43B',
@@ -38,8 +35,8 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     justifyContent: 'center',
-    minHeight: 18,
+    minHeight: 12,
   },
 });

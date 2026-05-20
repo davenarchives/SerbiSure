@@ -1,13 +1,12 @@
 import { FACE_LANDMARKS } from '../face/landmarkIndexes';
-import { distance, landmark, normalizedMovement } from '../face/geometry';
+import { distance, landmark } from '../face/geometry';
 import type { FaceAlignment, FaceLandmarks, HeadPoseDirection, LandmarkFrame } from '../face/types';
 
 const CENTER_TOLERANCE = 0.16;
 const MIN_FACE_SIZE = 0.2;
 const MAX_FACE_SIZE = 0.72;
 const BLINK_EAR_THRESHOLD = 0.2;
-const HEAD_TURN_THRESHOLD = 0.09;
-const STILLNESS_THRESHOLD = 0.012;
+const HEAD_TURN_THRESHOLD = 0.055;
 const STILLNESS_DURATION_MS = 3000;
 
 export function getFaceAlignment(frame: LandmarkFrame): FaceAlignment {
@@ -102,7 +101,8 @@ export function getHeadPoseDirection(face: FaceLandmarks): HeadPoseDirection {
 
   const faceMidline = (leftCheek.x + rightCheek.x) / 2;
   const faceWidth = Math.max(Math.abs(rightCheek.x - leftCheek.x), 1);
-  const offset = (nose.x - faceMidline) / faceWidth;
+  const rawOffset = (nose.x - faceMidline) / faceWidth;
+  const offset = face.signals?.mirrored ? -rawOffset : rawOffset;
 
   if (offset > HEAD_TURN_THRESHOLD) {
     return 'right';
@@ -130,14 +130,12 @@ export function getStillnessProgress(
     };
   }
 
-  const movement = normalizedMovement(previousStableFace, current);
-  const nextStableSince = movement <= STILLNESS_THRESHOLD ? stableSince : now;
-  const elapsed = now - nextStableSince;
+  const elapsed = now - stableSince;
 
   return {
     isStill: elapsed >= STILLNESS_DURATION_MS,
     progress: Math.min(elapsed / STILLNESS_DURATION_MS, 1),
-    stableSince: nextStableSince,
-    stableFace: movement <= STILLNESS_THRESHOLD ? previousStableFace : current,
+    stableSince,
+    stableFace: current,
   };
 }

@@ -1,5 +1,6 @@
 import type { Face as MlKitFace } from 'react-native-vision-camera-face-detector';
 import type { Frame } from 'react-native-vision-camera';
+import type { FaceLandmarkDetectionResultBundle, Landmark } from 'react-native-mediapipe';
 
 import { FACE_LANDMARKS } from './landmarkIndexes';
 import type { LandmarkFrame, Point2D } from './types';
@@ -109,6 +110,91 @@ export function faceDetectorToLandmarkFrame(
         yawAngle: face.yawAngle,
         pitchAngle: face.pitchAngle,
         rollAngle: face.rollAngle,
+      },
+      timestamp,
+    },
+    frameHeight,
+    frameWidth,
+    timestamp,
+  };
+}
+
+function mediaPipeLandmarkToPoint(landmark: Landmark, frameWidth: number, frameHeight: number, mirrored: boolean): Point2D {
+  const x = mirrored ? 1 - landmark.x : landmark.x;
+
+  return {
+    x: x * frameWidth,
+    y: landmark.y * frameHeight,
+    z: landmark.z * frameWidth,
+  };
+}
+
+function boundsFromPoints(points: Point2D[]) {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index];
+    if (!point) {
+      continue;
+    }
+
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
+  }
+
+  if (
+    minX === Number.POSITIVE_INFINITY ||
+    minY === Number.POSITIVE_INFINITY ||
+    maxX === Number.NEGATIVE_INFINITY ||
+    maxY === Number.NEGATIVE_INFINITY
+  ) {
+    return {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+    };
+  }
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+export function faceLandmarkerResultToLandmarkFrame(
+  resultBundle: FaceLandmarkDetectionResultBundle,
+  frameWidth: number,
+  frameHeight: number,
+  mirrored: boolean,
+): LandmarkFrame {
+  const timestamp = Date.now();
+  const faceLandmarks = resultBundle.results[0]?.faceLandmarks[0];
+
+  if (!faceLandmarks || faceLandmarks.length === 0) {
+    return {
+      face: null,
+      frameHeight,
+      frameWidth,
+      timestamp,
+    };
+  }
+
+  const points = faceLandmarks.map((landmark) => mediaPipeLandmarkToPoint(landmark, frameWidth, frameHeight, mirrored));
+
+  return {
+    face: {
+      bounds: boundsFromPoints(points),
+      points,
+      signals: {
+        mirrored,
       },
       timestamp,
     },

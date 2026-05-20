@@ -15,6 +15,7 @@ export type FaceLandmarks = {
   timestamp: number;
   signals?: {
     leftEyeOpenProbability?: number;
+    mirrored?: boolean;
     rightEyeOpenProbability?: number;
     yawAngle?: number;
     pitchAngle?: number;

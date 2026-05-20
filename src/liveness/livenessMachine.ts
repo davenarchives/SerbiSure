@@ -1,11 +1,12 @@
-import { getFaceAlignment, getHeadPoseDirection, getStillnessProgress, isBlinking } from './livenessRules';
+import { getFaceAlignment, getHeadPoseDirection, getStillnessProgress } from './livenessRules';
 import type { FaceLandmarks, LandmarkFrame } from '../face/types';
 
-export type LivenessStep = 'face' | 'blink' | 'turnLeft' | 'turnRight' | 'still' | 'verified';
+export type LivenessStep = 'face' | 'turnLeft' | 'turnRight' | 'still' | 'verified';
 
 export type LivenessResult = {
   verified: true;
   completedAt: number;
+  selfiePath?: string;
 };
 
 export type LivenessState = {
@@ -32,10 +33,9 @@ export const initialLivenessState: LivenessState = {
 
 const stepInstructions: Record<LivenessStep, string> = {
   face: 'Position your face inside the frame',
-  blink: 'Please blink your eyes',
-  turnLeft: 'Turn your head left',
-  turnRight: 'Turn your head right',
-  still: 'Please stay still',
+  turnLeft: 'Look left',
+  turnRight: 'Look right',
+  still: 'Face forward and stay still',
   verified: 'Face verification complete',
 };
 
@@ -82,13 +82,7 @@ export function advanceLiveness(state: LivenessState, frame: LandmarkFrame): Liv
   }
 
   if (state.step === 'face') {
-    return completeStep(state, 'face', 'blink');
-  }
-
-  if (state.step === 'blink') {
-    return isBlinking(face)
-      ? completeStep(state, 'blink', 'turnLeft')
-      : { ...state, instruction: stepInstructions.blink, retryMessage: null };
+    return completeStep(state, 'face', 'turnLeft');
   }
 
   const headPose = getHeadPoseDirection(face);
