@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Face Verify",
+    "slug": "faceverify-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "Face Verify needs camera access for liveness detection."
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Face Verify needs camera access for liveness detection."
+      }
+    },
+    "android": {
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "package": "com.faceverify"
+    }
+  }
+}
