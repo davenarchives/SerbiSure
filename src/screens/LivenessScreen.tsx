@@ -51,7 +51,7 @@ function LivenessRing({ progress, showFaceIcon, showCheck }: LivenessRingProps) 
   return (
     <View style={styles.ringBox}>
       <Canvas style={styles.ringCanvas}>
-        <Circle cx={size / 2} cy={size / 2} r={radius} color="#FFB43B" style="stroke" strokeWidth={2} />
+        <Circle cx={size / 2} cy={size / 2} r={(size - 2) / 2} color="#FFB43B" style="stroke" strokeWidth={2} />
         <Path path={arcPath} color="#0AA018" style="stroke" strokeWidth={strokeWidth} strokeCap="round" />
       </Canvas>
       {showFaceIcon ? <Image source={faceSource} style={styles.faceIcon} resizeMode="contain" /> : null}
