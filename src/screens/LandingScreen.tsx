@@ -7,9 +7,10 @@ const heroSource = require('../../assets/landingpage.png');
 
 type LandingScreenProps = {
   onGetStarted?: () => void;
+  onLogin?: () => void;
 };
 
-export function LandingScreen({ onGetStarted }: LandingScreenProps) {
+export function LandingScreen({ onGetStarted, onLogin }: LandingScreenProps) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -38,7 +39,7 @@ export function LandingScreen({ onGetStarted }: LandingScreenProps) {
 
         <View style={styles.loginContainer}>
           <Text style={styles.loginText}>Already have an account? </Text>
-          <Pressable>
+          <Pressable onPress={onLogin}>
             <Text style={styles.loginLink}>Log in</Text>
           </Pressable>
         </View>

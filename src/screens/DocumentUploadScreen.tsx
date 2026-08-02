@@ -291,6 +291,7 @@ const styles = StyleSheet.create({
     height: 38,
     justifyContent: 'center',
     marginBottom: 12,
+    marginHorizontal: 18,
   },
   buttonPressed: {
     opacity: 0.78,
@@ -307,6 +308,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 36,
     justifyContent: 'center',
+    marginHorizontal: 18,
   },
   secondaryButtonText: {
     color: '#FFA51F',

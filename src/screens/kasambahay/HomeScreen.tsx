@@ -74,8 +74,10 @@ export function HomeScreen({ avatarUri, onAvatarPress }: { avatarUri?: string | 
 
   return (
     <View style={styles.container}>
+      {/* Top Status Bar Spacer */}
+      <View style={{ height: insets.top, backgroundColor: '#F6F5F2', zIndex: 10 }} />
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 8 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: 8 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header Logo & Bell */}
@@ -91,13 +93,13 @@ export function HomeScreen({ avatarUri, onAvatarPress }: { avatarUri?: string | 
         <View style={styles.greetingBanner}>
           <Pressable onPress={onAvatarPress}>
             <Image
-              source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=daven' }}
+              source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }}
               style={styles.avatar}
             />
           </Pressable>
           <View style={styles.greetingTextContainer}>
             <Text style={styles.dateText}>{dateString}</Text>
-            <Text style={styles.greetingText}>Good day, Daven!</Text>
+            <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>Good day, Kasambahay!</Text>
           </View>
           <Ionicons name="options-outline" size={28} color="#333" />
         </View>
@@ -282,7 +284,6 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginRight: 16,
-    transform: [{ scaleX: -1 }],
   },
   greetingTextContainer: {
     flex: 1,
@@ -294,8 +295,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   greetingText: {
-    fontSize: 22,
-    fontWeight: '500',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#1A1A1A',
   },
   sectionHeader: {

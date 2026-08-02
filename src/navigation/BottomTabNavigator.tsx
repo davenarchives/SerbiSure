@@ -13,6 +13,9 @@ import { JobsScreen as KasambahayJobsScreen } from '../screens/kasambahay/JobsSc
 import { ChatsScreen as KasambahayChatsScreen } from '../screens/kasambahay/ChatsScreen';
 import { ProfileScreen as KasambahayProfileScreen } from '../screens/kasambahay/ProfileScreen';
 
+import { PostJobScreen } from '../screens/homeowner/PostJobScreen';
+import { PostServiceScreen } from '../screens/kasambahay/PostServiceScreen';
+
 export type Role = 'homeowner' | 'kasambahay';
 export type Tab = 'home' | 'services' | 'chats' | 'profile';
 
@@ -25,6 +28,7 @@ interface BottomTabNavigatorProps {
 export function BottomTabNavigator({ role = 'homeowner', avatarUri, onLogout }: BottomTabNavigatorProps) {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [postJobVisible, setPostJobVisible] = useState(false);
 
   const isKasambahay = role === 'kasambahay';
 
@@ -49,8 +53,23 @@ export function BottomTabNavigator({ role = 'homeowner', avatarUri, onLogout }: 
     }
   };
 
+  const topBgColor = activeTab === 'profile' ? '#FFF0DB' : '#F6F5F2';
+
   return (
     <View style={styles.root}>
+      {/* Top Status Bar Solid Background Overlay - Prevents scrolled content from overlapping status bar */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: insets.top,
+          backgroundColor: topBgColor,
+          zIndex: 999,
+        }}
+        pointerEvents="none"
+      />
       <View style={styles.content}>{renderScreen()}</View>
 
       {/* Floating Bottom Navigation */}
@@ -97,10 +116,16 @@ export function BottomTabNavigator({ role = 'homeowner', avatarUri, onLogout }: 
           </View>
         </View>
 
-        <Pressable style={styles.fab}>
+        <Pressable style={styles.fab} onPress={() => setPostJobVisible(true)}>
           <Ionicons name="add" size={32} color="#FFFFFF" />
         </Pressable>
       </View>
+
+      {isKasambahay ? (
+        <PostServiceScreen visible={postJobVisible} onClose={() => setPostJobVisible(false)} />
+      ) : (
+        <PostJobScreen visible={postJobVisible} onClose={() => setPostJobVisible(false)} />
+      )}
     </View>
   );
 }

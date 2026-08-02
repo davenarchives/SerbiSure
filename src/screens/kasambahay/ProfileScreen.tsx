@@ -20,6 +20,8 @@ export function ProfileScreen({
 
   return (
     <View style={styles.container}>
+      {/* Top Status Bar Spacer */}
+      <View style={{ height: insets.top, backgroundColor: '#FFF0DB', zIndex: 10 }} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingTop: 0 }]}
@@ -33,11 +35,11 @@ export function ProfileScreen({
             style={{ width: '100%', height: 220, position: 'absolute', top: 0 }}
           />
         ) : (
-          <View style={[styles.headerBg, { height: insets.top + 200 }]} />
+          <View style={[styles.headerBg, { height: 200 }]} />
         )}
 
         {/* Header Row */}
-        <View style={[styles.headerRow, { marginTop: insets.top + 10, marginBottom: 30 }]}>
+        <View style={[styles.headerRow, { marginTop: 10, marginBottom: 30 }]}>
           <Pressable onPress={() => (currentView === 'personal_info' ? setCurrentView('main') : onBack?.())}>
             <Ionicons
               name="arrow-back"
@@ -55,13 +57,13 @@ export function ProfileScreen({
             <View style={styles.personalInfoCard}>
               <View style={styles.personalAvatarWrapper}>
                 <Image
-                  source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=daven' }}
+                  source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }}
                   style={styles.personalAvatar}
                 />
               </View>
 
               <View style={styles.personalNameRow}>
-                <Text style={styles.personalName}>Daven de Guzman</Text>
+                <Text style={styles.personalName}>Kasambahay</Text>
                 <Ionicons name="checkmark-circle" size={18} color="#4CAF50" style={{ marginLeft: 6 }} />
               </View>
               <Text style={styles.personalRole}>Housekeeper & Cook</Text>
@@ -92,7 +94,7 @@ export function ProfileScreen({
 
             {/* About Section */}
             <View style={styles.aboutSection}>
-              <Text style={styles.sectionTitle}>About Daven</Text>
+              <Text style={styles.sectionTitle}>About Kasambahay</Text>
               <Text style={styles.aboutText}>
                 Hi, I'm Michelangelo, a verified housekeeper and cook based in Cagayan de Oro. I provide reliable, top-rated home care services, specializing in house cleaning, meal prep, childcare, and pet care to keep your household running smoothly and efficiently.
               </Text>
@@ -132,7 +134,7 @@ export function ProfileScreen({
             <View style={styles.profileInfoContainer}>
               <View style={styles.avatarWrapper}>
                 <Image
-                  source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=daven' }}
+                  source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }}
                   style={styles.avatar}
                 />
                 <View style={styles.editIconBadge}>
@@ -142,7 +144,7 @@ export function ProfileScreen({
 
               <View style={styles.profileDetails}>
                 <View style={styles.nameRow}>
-                  <Text style={styles.profileName}>Daven de Guzman</Text>
+                  <Text style={styles.profileName}>Kasambahay</Text>
                   <Ionicons name="checkmark-circle" size={18} color="#4CAF50" style={{ marginLeft: 6 }} />
                 </View>
                 <Text style={styles.profilePhone}>+63 951 885 9238</Text>
@@ -294,7 +296,6 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    transform: [{ scaleX: -1 }],
   },
   editIconBadge: {
     position: 'absolute',
@@ -440,13 +441,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 38,
     borderWidth: 4,
-    borderColor: '#F9F8F6',
+    borderColor: '#FFECCB',
   },
   personalAvatar: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    transform: [{ scaleX: -1 }],
   },
   personalNameRow: {
     flexDirection: 'row',

@@ -1,19 +1,49 @@
-import React from 'react';
-import { StyleSheet, Text, View, TextInput, Image, ScrollView, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, View, Image, ScrollView, TextInput, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
+import { ChatDetailScreen } from '../ChatDetailScreen';
+import { chatStore, ChatConversation } from '../../store/chatStore';
+
 export function ChatsScreen() {
   const insets = useSafeAreaInsets();
+  const [chatList, setChatList] = useState<ChatConversation[]>(chatStore.getChats());
+  const [activeChat, setActiveChat] = useState<{
+    visible: boolean;
+    name: string;
+    role: string;
+    avatar: string;
+  }>({
+    visible: false,
+    name: 'Vincente Ganda',
+    role: 'Cleaner',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300',
+  });
+
+  React.useEffect(() => {
+    setChatList([...chatStore.getChats()]);
+    const unsubscribe = chatStore.subscribe(() => {
+      setChatList([...chatStore.getChats()]);
+    });
+    return unsubscribe;
+  }, []);
+
+  const openChat = (name: string, role: string, avatar: string) => {
+    setActiveChat({ visible: true, name, role, avatar });
+  };
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+      {/* Top Status Bar Spacer */}
+      <View style={{ height: insets.top, backgroundColor: '#FFECCB', zIndex: 10 }} />
+
+      {/* Top Banner */}
+      <View style={[styles.header, { paddingTop: 16 }]}>
         <Text style={styles.headerTitle}>Messages</Text>
-        
         <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
-          <TextInput 
+          <Ionicons name="search" size={18} color="#888" style={styles.searchIcon} />
+          <TextInput
             placeholder="Search Conversations"
             placeholderTextColor="#888"
             style={styles.searchInput}
@@ -21,110 +51,93 @@ export function ChatsScreen() {
         </View>
       </View>
 
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.sectionTitle}>RECENT</Text>
-        
-        <ChatItem 
-          name="Vincente Ganda"
-          role="Cleaner"
-          message="Ok po! Nandito na ako..."
-          time="2m ago"
-          avatar="https://i.pravatar.cc/150?u=vincente"
-          online={true}
-        />
-        <View style={styles.divider} />
-        
-        <ChatItem 
-          name="Tiya Kalood"
-          role="Babysitter"
-          message="Thank you po, Ma'am!"
-          time="1h ago"
-          avatar="https://i.pravatar.cc/150?u=tiya"
-          online={true}
-        />
-        <View style={styles.divider} />
-        
-        <ChatItem 
-          name="Sisa"
-          role="Yaya/Cook"
-          message="You: See you tomorrow!"
-          time="Mon"
-          avatar="https://i.pravatar.cc/150?u=sisa"
-          online={true}
-        />
-        <View style={styles.divider} />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionHeader}>RECENT</Text>
 
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>BOOKING UPDATES</Text>
-        
-        <View style={styles.bookingCard}>
-          <View style={styles.bookingIconContainer}>
-            <Ionicons name="document-text" size={24} color="#FFF" />
-          </View>
-          <View style={styles.bookingInfo}>
-            <Text style={styles.bookingTitle}>Vincente Ganda booked.</Text>
-            <View style={styles.bookingSubRow}>
-              <Text style={styles.bookingSubtext}>Start date: May 11</Text>
-              <Text style={styles.bookingDot}>•</Text>
-              <Text style={styles.bookingAction}>Tap to review</Text>
+        <View style={styles.chatList}>
+          {chatList.map((chat) => (
+            <Pressable
+              key={chat.id}
+              style={({ pressed }) => [styles.chatCard, pressed && styles.chatCardPressed]}
+              onPress={() => openChat(chat.name, chat.badge, chat.avatar)}
+            >
+              <View style={styles.avatarContainer}>
+                <Image source={{ uri: chat.avatar }} style={styles.avatar} />
+                {chat.online && <View style={styles.onlineDot} />}
+              </View>
+
+              <View style={styles.chatContent}>
+                <View style={styles.titleRow}>
+                  <View style={styles.nameBadgeRow}>
+                    <Text style={styles.name}>{chat.name}</Text>
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{chat.badge}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.time}>{chat.time}</Text>
+                </View>
+                <Text style={styles.message} numberOfLines={1}>
+                  {chat.message}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={[styles.sectionHeader, { marginTop: 24 }]}>BOOKING UPDATES</Text>
+
+        <View style={{ paddingHorizontal: 24 }}>
+          <Pressable
+            style={styles.bookingCard}
+            onPress={() => openChat('Vincente Ganda', 'Cleaner', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300')}
+          >
+            <View style={styles.bookingIconContainer}>
+              <Ionicons name="document-text" size={24} color="#FFF" />
             </View>
-          </View>
+            <View style={styles.bookingInfo}>
+              <Text style={styles.bookingTitle}>Vincente Ganda booked.</Text>
+              <Text style={styles.bookingSubtext}>Start date: May 11  •  Tap to review</Text>
+            </View>
+          </Pressable>
         </View>
 
         <View style={{ height: 100 }} />
       </ScrollView>
-    </View>
-  );
-}
 
-function ChatItem({ name, role, message, time, avatar, online }: any) {
-  return (
-    <Pressable style={styles.chatItem}>
-      <View style={styles.avatarContainer}>
-        <Image source={{ uri: avatar }} style={styles.avatar} />
-        {online && <View style={styles.onlineDot} />}
-      </View>
-      
-      <View style={styles.chatInfo}>
-        <View style={styles.chatHeader}>
-          <Text style={styles.chatName}>{name}</Text>
-          <Text style={styles.chatTime}>{time}</Text>
-        </View>
-        
-        <View style={styles.roleBadge}>
-          <Text style={styles.roleText}>{role}</Text>
-        </View>
-        
-        <Text style={styles.chatMessage} numberOfLines={1}>{message}</Text>
-      </View>
-    </Pressable>
+      {/* Messenger-style Chat Detail Modal */}
+      <ChatDetailScreen
+        visible={activeChat.visible}
+        onClose={() => setActiveChat((prev) => ({ ...prev, visible: false }))}
+        contactName={activeChat.name}
+        contactRole={activeChat.role}
+        contactAvatar={activeChat.avatar}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9F8F6',
+    backgroundColor: '#FFF',
   },
   header: {
     backgroundColor: '#FFECCB',
     paddingHorizontal: 24,
-    paddingBottom: 24,
+    paddingBottom: 20,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: '#1A1A1A',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFF',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: 20,
+    paddingHorizontal: 16,
     height: 44,
   },
   searchIcon: {
@@ -132,87 +145,94 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     color: '#333',
   },
   scrollContent: {
-    paddingTop: 24,
+    paddingTop: 16,
+  },
+  sectionHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#888',
+    letterSpacing: 1,
+    paddingHorizontal: 24,
+    marginBottom: 12,
+  },
+  chatList: {
     paddingHorizontal: 24,
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#888',
-    marginBottom: 16,
-  },
-  chatItem: {
+  chatCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  chatCardPressed: {
+    backgroundColor: '#F9F8F6',
   },
   avatarContainer: {
     position: 'relative',
-    marginRight: 16,
+    marginRight: 14,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
   },
   onlineDot: {
     position: 'absolute',
     bottom: 2,
     right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#4CD964',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4CAF50',
     borderWidth: 2,
     borderColor: '#FFF',
   },
-  chatInfo: {
+  chatContent: {
     flex: 1,
   },
-  chatHeader: {
+  titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
   },
-  chatName: {
-    fontSize: 16,
-    fontWeight: '600',
+  nameBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  name: {
+    fontSize: 15,
+    fontWeight: '700',
     color: '#1A1A1A',
   },
-  chatTime: {
-    fontSize: 13,
+  badge: {
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#6D28D9',
+  },
+  time: {
+    fontSize: 11,
     color: '#888',
   },
-  roleBadge: {
-    backgroundColor: '#EBE9F6', // light purple
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    marginBottom: 6,
-  },
-  roleText: {
-    fontSize: 10,
-    color: '#551A8B', // purple text
-    fontWeight: '600',
-  },
-  chatMessage: {
-    fontSize: 14,
+  message: {
+    fontSize: 13,
     color: '#666',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#E8E4DF',
-    marginLeft: 76,
   },
   bookingCard: {
     backgroundColor: '#FFECCB',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -222,36 +242,23 @@ const styles = StyleSheet.create({
   bookingIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 14,
     backgroundColor: '#FFB43B',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
+    marginRight: 14,
   },
   bookingInfo: {
     flex: 1,
   },
   bookingTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#1A1A1A',
-    marginBottom: 4,
-  },
-  bookingSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   bookingSubtext: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#666',
+    marginTop: 4,
   },
-  bookingDot: {
-    fontSize: 13,
-    color: '#666',
-    marginHorizontal: 8,
-  },
-  bookingAction: {
-    fontSize: 13,
-    color: '#666',
-  }
 });

@@ -3,43 +3,42 @@ import { StyleSheet, Text, View, Image, ScrollView, TextInput, Pressable } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-const MOCK_CHATS = [
-  {
-    id: 1,
-    name: 'Joshua Asucal',
-    badge: 'Homeowner',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300',
-    time: '2m ago',
-    message: 'Hello, i have seen your application..',
-    online: true,
-  },
-  {
-    id: 2,
-    name: 'Daniela Mondaragon',
-    badge: 'Homeowner',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
-    time: '1h ago',
-    message: 'Thank you for your service!',
-    online: true,
-  },
-  {
-    id: 3,
-    name: 'Camille Prats',
-    badge: 'Homeowner',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=300',
-    time: 'Mon',
-    message: 'You: Oki po, ty!',
-    online: true,
-  },
-];
+import { ChatDetailScreen } from '../ChatDetailScreen';
+import { chatStore, ChatConversation } from '../../store/chatStore';
 
 export function ChatsScreen() {
   const insets = useSafeAreaInsets();
+  const [chatList, setChatList] = React.useState<ChatConversation[]>(chatStore.getChats());
+  const [activeChat, setActiveChat] = React.useState<{
+    visible: boolean;
+    name: string;
+    role: string;
+    avatar: string;
+  }>({
+    visible: false,
+    name: 'Joshua Asucal',
+    role: 'Homeowner',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300',
+  });
+
+  React.useEffect(() => {
+    setChatList([...chatStore.getChats()]);
+    const unsubscribe = chatStore.subscribe(() => {
+      setChatList([...chatStore.getChats()]);
+    });
+    return unsubscribe;
+  }, []);
+
+  const openChat = (name: string, role: string, avatar: string) => {
+    setActiveChat({ visible: true, name, role, avatar });
+  };
 
   return (
     <View style={styles.container}>
+      {/* Top Status Bar Spacer */}
+      <View style={{ height: insets.top, backgroundColor: '#FFECCB', zIndex: 10 }} />
       {/* Top Banner */}
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+      <View style={[styles.header, { paddingTop: 16 }]}>
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={18} color="#888" style={styles.searchIcon} />
@@ -55,8 +54,12 @@ export function ChatsScreen() {
         <Text style={styles.sectionHeader}>RECENT</Text>
 
         <View style={styles.chatList}>
-          {MOCK_CHATS.map((chat) => (
-            <Pressable key={chat.id} style={({ pressed }) => [styles.chatCard, pressed && styles.chatCardPressed]}>
+          {chatList.map((chat) => (
+            <Pressable
+              key={chat.id}
+              style={({ pressed }) => [styles.chatCard, pressed && styles.chatCardPressed]}
+              onPress={() => openChat(chat.name, chat.badge, chat.avatar)}
+            >
               <View style={styles.avatarContainer}>
                 <Image source={{ uri: chat.avatar }} style={styles.avatar} />
                 {chat.online && <View style={styles.onlineDot} />}
@@ -82,6 +85,15 @@ export function ChatsScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Messenger-style Chat Detail Modal */}
+      <ChatDetailScreen
+        visible={activeChat.visible}
+        onClose={() => setActiveChat((prev) => ({ ...prev, visible: false }))}
+        contactName={activeChat.name}
+        contactRole={activeChat.role}
+        contactAvatar={activeChat.avatar}
+      />
     </View>
   );
 }

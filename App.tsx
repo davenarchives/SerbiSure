@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import {
   LandingScreen,
+  LoginScreen,
   UserSelectionScreen,
   RegistrationStep1,
   RegistrationStep2,
@@ -12,9 +13,10 @@ import {
 import { BottomTabNavigator, type Role } from './src/navigation/BottomTabNavigator';
 
 // Clean App Navigation Flow matching Figma structure:
-// landing -> user_selection -> registration1-3 -> dashboard (bottom tab navigator)
+// landing -> login -> user_selection -> registration1-3 -> dashboard (bottom tab navigator)
 type AppFlowState =
   | 'landing'
+  | 'login'
   | 'user_selection'
   | 'registration1'
   | 'registration2'
@@ -37,7 +39,19 @@ export default function App() {
 
       {/* Step 1: Landing Page */}
       {flowState === 'landing' && (
-        <LandingScreen onGetStarted={() => setFlowState('user_selection')} />
+        <LandingScreen
+          onGetStarted={() => setFlowState('user_selection')}
+          onLogin={() => setFlowState('login')}
+        />
+      )}
+
+      {/* Step 1.5: Login Screen */}
+      {flowState === 'login' && (
+        <LoginScreen
+          onLoginSuccess={() => setFlowState('dashboard')}
+          onSignUp={() => setFlowState('user_selection')}
+          onBack={() => setFlowState('landing')}
+        />
       )}
 
       {/* Step 2: User Selection (Homeowner / Kasambahay) */}
@@ -89,7 +103,7 @@ export default function App() {
         <BottomTabNavigator
           role={selectedRole}
           avatarUri={avatarUri}
-          onLogout={() => setFlowState('landing')}
+          onLogout={() => setFlowState('login')}
         />
       )}
     </SafeAreaProvider>
