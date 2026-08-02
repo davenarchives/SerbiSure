@@ -14,13 +14,15 @@ import {
   type LivenessState,
 } from '../liveness/livenessMachine';
 import { getFaceAlignment } from '../liveness/livenessRules';
-import { StepProgress } from '../ui/StepProgress';
 
-const logoSource = require('../../assets/face-placeholder.png');
-const faceSource = require('../../assets/happybird-logo.png');
+const logoSource = require('../../assets/serbisure-logo.png');
+const faceSource = require('../../assets/face-placeholder.png');
 
 type LivenessScreenProps = {
   onVerified?: (result: LivenessResult) => void;
+  onBack?: () => void;
+  onCancel?: () => void;
+  onSkip?: () => void;
 };
 
 type LivenessRingProps = {
@@ -87,11 +89,11 @@ function getRingProgress(state: LivenessState) {
 
 function getInstruction(state: LivenessState, showTrackerNotice: boolean, countdownValue: number | null) {
   if (showTrackerNotice) {
-    return 'Position your face inside the frame';
+    return 'Position your face\ninside the frame';
   }
 
   if (state.step === 'face') {
-    return 'Position your face inside the frame';
+    return 'Position your face\ninside the frame';
   }
 
   if (state.step === 'turnLeft') {
@@ -109,7 +111,7 @@ function getInstruction(state: LivenessState, showTrackerNotice: boolean, countd
   return 'Face forward and stay still';
 }
 
-export function LivenessScreen({ onVerified }: LivenessScreenProps) {
+export function LivenessScreen({ onVerified, onBack, onCancel, onSkip }: LivenessScreenProps) {
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<FaceCameraHandle | null>(null);
   const captureStartedRef = useRef(false);
@@ -181,7 +183,7 @@ export function LivenessScreen({ onVerified }: LivenessScreenProps) {
 
   const instruction = started
     ? getInstruction(state, showTrackerNotice, countdownValue)
-    : 'Make sure your selfie is within the frame and you are in a well lit area. Remove anything on your face like a face mask or sunglasses.';
+    : 'Make sure your selfie is within the frame and you\'re in a well lit area. Remove anything on your face like a face mask or sunglasses.';
   const ringProgress = started ? getRingProgress(state) : 0;
   const showFaceIcon = !started;
 
@@ -212,14 +214,23 @@ export function LivenessScreen({ onVerified }: LivenessScreenProps) {
     setShowCenterCheck(false);
     setCapturedSelfiePath(null);
     captureStartedRef.current = false;
-  }, []);
+    onCancel?.();
+  }, [onCancel]);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 14) }]}>
       <View style={styles.header}>
-        <Ionicons name="arrow-back-outline" size={30} color="#2A2925" style={styles.backIcon} />
+        <View style={styles.headerSide}>
+          <Pressable onPress={onBack}>
+            <Ionicons name="arrow-back" size={26} color="#2A2925" />
+          </Pressable>
+        </View>
         <Image source={logoSource} style={styles.logo} resizeMode="contain" />
-        <Text style={styles.skipText}>Skip</Text>
+        <View style={[styles.headerSide, styles.headerSideRight]}>
+          <Pressable onPress={onSkip}>
+            <Text style={styles.skipText}>Skip</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.titleBlock}>
@@ -228,56 +239,61 @@ export function LivenessScreen({ onVerified }: LivenessScreenProps) {
       </View>
 
       <View style={styles.card}>
-        <StepProgress currentStep={state.step} completedSteps={state.completedSteps} />
-
-        <View style={styles.verificationFrame}>
-          {capturedSelfiePath ? (
-            <Image source={{ uri: `file://${capturedSelfiePath}` }} style={styles.capturedSelfie} resizeMode="cover" />
-          ) : started ? (
-            <View style={styles.cameraCircle}>
-              <FaceCamera ref={cameraRef} onLandmarks={handleLandmarks} />
-            </View>
-          ) : null}
-          <LivenessRing progress={ringProgress} showFaceIcon={showFaceIcon} showCheck={started && showCenterCheck} />
-          {started && countdownValue !== null ? (
-            <View style={styles.countdownBadge}>
-              <Text style={styles.countdownText}>{countdownValue}</Text>
-            </View>
-          ) : null}
+        <View style={styles.stepIndicator}>
+          <View style={styles.stepDot} />
+          <View style={styles.stepDot} />
+          <View style={[styles.stepDot, styles.stepDotActive]} />
         </View>
 
-        <Text style={[styles.instruction, !started && styles.helperInstruction]}>
-          {instruction}
-        </Text>
+        <View style={styles.cardContent}>
+          <View>
+            <View style={styles.verificationFrame}>
+              {capturedSelfiePath ? (
+                <Image source={{ uri: `file://${capturedSelfiePath}` }} style={styles.capturedSelfie} resizeMode="cover" />
+              ) : started ? (
+                <View style={styles.cameraCircle}>
+                  <FaceCamera ref={cameraRef} onLandmarks={handleLandmarks} />
+                </View>
+              ) : null}
+              <LivenessRing progress={ringProgress} showFaceIcon={showFaceIcon} showCheck={started && showCenterCheck} />
+              {started && countdownValue !== null ? (
+                <View style={styles.countdownBadge}>
+                  <Text style={styles.countdownText}>{countdownValue}</Text>
+                </View>
+              ) : null}
+            </View>
 
-        <View style={styles.divider} />
-
-        {!started ? (
-          <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={handleContinue}>
-            <Text style={styles.primaryButtonText}>Continue</Text>
-          </Pressable>
-        ) : state.retryMessage ? (
-          <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={handleRetry}>
-            <Text style={styles.primaryButtonText}>Finish</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>Finish</Text>
+            <Text style={[styles.instruction, !started && styles.helperInstruction]}>
+              {instruction}
+            </Text>
           </View>
-        )}
 
-        <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={handleCancel}>
-          <Text style={styles.secondaryButtonText}>Cancel</Text>
-        </Pressable>
+          <View>
+            <View style={styles.divider} />
+            {!started ? (
+              <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={handleContinue}>
+                <Text style={styles.primaryButtonText}>Continue</Text>
+              </Pressable>
+            ) : state.retryMessage ? (
+              <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={handleRetry}>
+                <Text style={styles.primaryButtonText}>Continue</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.primaryButton}>
+                <Text style={styles.primaryButtonText}>Continue</Text>
+              </View>
+            )}
+            <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={handleCancel}>
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  backIcon: {
-    width: 52,
-  },
   buttonPressed: {
     opacity: 0.78,
   },
@@ -285,12 +301,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 11,
-    marginTop: 44,
-    minHeight: 528,
-    paddingBottom: 18,
+    flex: 1,
+    marginTop: 14,
+    paddingBottom: 16,
     paddingHorizontal: 18,
     paddingTop: 8,
     width: '88%',
+  },
+  cardContent: {
+    flex: 1,
+    justifyContent: 'space-between',
   },
   cameraCircle: {
     ...StyleSheet.absoluteFillObject,
@@ -351,8 +371,8 @@ const styles = StyleSheet.create({
   divider: {
     backgroundColor: '#707070',
     height: StyleSheet.hairlineWidth,
-    marginBottom: 14,
-    marginTop: 38,
+    marginBottom: 12,
+    marginTop: 16,
     width: '100%',
   },
   faceIcon: {
@@ -364,26 +384,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
+    width: '100%',
+  },
+  headerSide: {
+    width: 44,
+    justifyContent: 'center',
+  },
+  headerSideRight: {
+    alignItems: 'flex-end',
   },
   helperInstruction: {
     fontSize: 13,
     fontWeight: '400',
     lineHeight: 17,
-    marginTop: 26,
+    marginTop: 32,
     paddingHorizontal: 14,
   },
   instruction: {
     color: '#000000',
     fontSize: 16,
     fontWeight: '700',
-    lineHeight: 20,
-    marginTop: 22,
-    minHeight: 44,
+    lineHeight: 22,
+    marginTop: 32,
+    minHeight: 48,
     textAlign: 'center',
   },
   logo: {
-    height: 42,
-    width: 62,
+    height: 44,
+    width: 44,
   },
   primaryButton: {
     alignItems: 'center',
@@ -430,25 +458,39 @@ const styles = StyleSheet.create({
     color: '#FFA51F',
     fontSize: 13,
     fontWeight: '500',
-    textAlign: 'right',
-    width: 52,
+  },
+  titleBlock: {
+    height: 64,
+    marginTop: 12,
+    paddingHorizontal: 24,
+  },
+  title: {
+    color: '#000000',
+    fontSize: 24,
+    fontWeight: '900',
+    lineHeight: 29,
+    marginBottom: 2,
   },
   subtitle: {
     color: '#202020',
     fontSize: 13,
-    lineHeight: 16,
-    marginTop: 2,
+    lineHeight: 17,
   },
-  title: {
-    color: '#000000',
-    fontSize: 27,
-    fontWeight: '900',
-    letterSpacing: 0,
-    lineHeight: 33,
+  stepIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 24,
+    marginTop: 4,
   },
-  titleBlock: {
-    marginTop: 28,
-    paddingHorizontal: 24,
+  stepDot: {
+    width: 24,
+    height: 4,
+    backgroundColor: '#D9D9D9',
+    borderRadius: 2,
+  },
+  stepDotActive: {
+    backgroundColor: '#FFB43B',
   },
   verificationFrame: {
     alignItems: 'center',

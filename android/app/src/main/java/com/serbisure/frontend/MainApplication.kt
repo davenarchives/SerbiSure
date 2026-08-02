@@ -1,4 +1,4 @@
-package com.faceverify
+package com.serbisure.frontend
 
 import android.app.Application
 import android.content.res.Configuration
