@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Face Verify",
-    "slug": "faceverify-mobile",
+    "name": "SerbiSure",
+    "slug": "serbisure-frontend",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -12,21 +12,30 @@
       [
         "react-native-vision-camera",
         {
-          "cameraPermissionText": "Face Verify needs camera access for liveness detection."
+          "cameraPermissionText": "SerbiSure needs camera access for liveness detection."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SerbiSure needs access to your photos to upload documents.",
+          "cameraPermission": "SerbiSure needs camera access to take document photos."
         }
       ]
     ],
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
-        "NSCameraUsageDescription": "Face Verify needs camera access for liveness detection."
+        "NSCameraUsageDescription": "SerbiSure needs camera access for liveness detection."
       }
     },
     "android": {
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE"
       ],
-      "package": "com.faceverify"
+      "package": "com.serbisure.frontend"
     }
   }
 }
