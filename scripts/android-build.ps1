@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $androidDir = Join-Path $projectRoot "android"
-$projectCacheDir = "C:\gradle-faceverify-cache"
+$projectCacheDir = "C:\gradle-serbisure-frontend-cache"
 
 if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME "bin\javac.exe"))) {
   $jdkHome = $env:JAVA_HOME
