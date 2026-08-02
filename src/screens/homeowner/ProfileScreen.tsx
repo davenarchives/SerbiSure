@@ -11,6 +11,8 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
 
   return (
     <View style={styles.container}>
+      {/* Top Status Bar Spacer */}
+      <View style={{ height: insets.top, backgroundColor: '#FFF0DB', zIndex: 10 }} />
       <ScrollView 
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingTop: 0 }]}
@@ -24,11 +26,11 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
             style={{ width: '100%', height: 220, position: 'absolute', top: 0 }}
           />
         ) : (
-          <View style={[styles.headerBg, { height: insets.top + 200 }]} />
+          <View style={[styles.headerBg, { height: 200 }]} />
         )}
 
         {/* Header Row (Scrolls with content) */}
-        <View style={[styles.headerRow, { marginTop: insets.top + 10, marginBottom: 30 }]}>
+        <View style={[styles.headerRow, { marginTop: 10, marginBottom: 30 }]}>
           <Pressable onPress={() => currentView === 'personal_info' ? setCurrentView('main') : onBack?.()}>
             <Ionicons 
               name="arrow-back" 
@@ -46,13 +48,13 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
             <View style={styles.personalInfoCard}>
               <View style={styles.personalAvatarWrapper}>
                 <Image 
-                  source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=maja' }} 
+                  source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }} 
                   style={styles.personalAvatar} 
                 />
               </View>
               
               <View style={styles.personalNameRow}>
-                <Text style={styles.personalName}>User</Text>
+                <Text style={styles.personalName}>Homeowner</Text>
                 <Ionicons name="checkmark-circle" size={18} color="#4CAF50" style={{ marginLeft: 6 }} />
               </View>
               <Text style={styles.personalRole}>Homeowner</Text>
@@ -82,7 +84,7 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
 
             {/* About Section */}
             <View style={styles.aboutSection}>
-              <Text style={styles.sectionTitle}>About User</Text>
+              <Text style={styles.sectionTitle}>About Homeowner</Text>
               <Text style={styles.aboutText}>
                 I'm a homeowner in Cagayan de Oro with two kids and a pet cat. I'm looking for a reliable nanny who can help care for my children, assist with daily routines, and be comfortable around pets while keeping our home safe and organized.
               </Text>
@@ -119,7 +121,7 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
             <View style={styles.profileInfoContainer}>
               <View style={styles.avatarWrapper}>
                 <Image 
-                  source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=maja' }} 
+                  source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }} 
                   style={styles.avatar} 
                 />
                 <View style={styles.editIconBadge}>
@@ -129,7 +131,7 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
               
               <View style={styles.profileDetails}>
                 <View style={styles.nameRow}>
-                  <Text style={styles.profileName}>User</Text>
+                  <Text style={styles.profileName}>Homeowner</Text>
                   <Ionicons name="checkmark-circle" size={18} color="#4CAF50" style={{ marginLeft: 6 }} />
                 </View>
                 <Text style={styles.profilePhone}>+63 951 885 9238</Text>
@@ -355,7 +357,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 38,
     borderWidth: 4,
-    borderColor: '#F9F8F6',
+    borderColor: '#FFECCB',
   },
   personalAvatar: {
     width: 70,
