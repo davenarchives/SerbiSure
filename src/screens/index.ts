@@ -1,5 +1,6 @@
-// Step 1: Landing Page
+// Step 1: Landing Page & Login
 export { LandingScreen } from './LandingScreen';
+export { LoginScreen } from './LoginScreen';
 
 // Step 2: User Selection (Homeowner / Kasambahay)
 export { RoleSelectionScreen as UserSelectionScreen } from './RoleSelectionScreen';
