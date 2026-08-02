@@ -1,0 +1,22 @@
+// Step 1: Landing Page
+export { LandingScreen } from './LandingScreen';
+
+// Step 2: User Selection (Homeowner / Kasambahay)
+export { RoleSelectionScreen as UserSelectionScreen } from './RoleSelectionScreen';
+
+// Step 3-5: Registration Flow (Registration 1-3)
+export { RegistrationStep1 } from './registration/RegistrationStep1';
+export { RegistrationStep2 } from './registration/RegistrationStep2';
+export { RegistrationStep3 } from './registration/RegistrationStep3';
+
+// Homeowner Dashboard Screens
+export { HomeScreen as HomeownerHomeScreen } from './homeowner/HomeScreen';
+export { ServicesScreen as HomeownerServicesScreen } from './homeowner/ServicesScreen';
+export { ChatsScreen as HomeownerChatsScreen } from './homeowner/ChatsScreen';
+export { ProfileScreen as HomeownerProfileScreen } from './homeowner/ProfileScreen';
+
+// Kasambahay Dashboard Screens
+export { HomeScreen as KasambahayHomeScreen } from './kasambahay/HomeScreen';
+export { JobsScreen as KasambahayJobsScreen } from './kasambahay/JobsScreen';
+export { ChatsScreen as KasambahayChatsScreen } from './kasambahay/ChatsScreen';
+export { ProfileScreen as KasambahayProfileScreen } from './kasambahay/ProfileScreen';
