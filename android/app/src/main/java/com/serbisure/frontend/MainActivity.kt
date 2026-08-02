@@ -1,4 +1,4 @@
-package com.faceverify
+package com.serbisure.frontend
 
 import android.os.Build
 import android.os.Bundle
