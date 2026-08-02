@@ -7,12 +7,14 @@ import { HomeScreen } from './HomeScreen';
 import { JobsScreen } from './JobsScreen';
 import { ChatsScreen } from './ChatsScreen';
 import { ProfileScreen } from './ProfileScreen';
+import { PostServiceScreen } from './PostServiceScreen';
 
 type Tab = 'home' | 'jobs' | 'chats' | 'profile';
 
 export function KasambahayApp({ avatarUri, onLogout }: { avatarUri?: string | null; onLogout?: () => void }) {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [isPostModalVisible, setIsPostModalVisible] = useState(false);
 
   const renderScreen = () => {
     switch (activeTab) {
@@ -27,8 +29,23 @@ export function KasambahayApp({ avatarUri, onLogout }: { avatarUri?: string | nu
     }
   };
 
+  const topBgColor = activeTab === 'profile' ? '#FFF0DB' : '#F6F5F2';
+
   return (
     <View style={styles.root}>
+      {/* Top Status Bar Solid Background Overlay */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: insets.top,
+          backgroundColor: topBgColor,
+          zIndex: 999,
+        }}
+        pointerEvents="none"
+      />
       <View style={styles.content}>{renderScreen()}</View>
 
       {/* Floating Bottom Navigation */}
@@ -72,10 +89,16 @@ export function KasambahayApp({ avatarUri, onLogout }: { avatarUri?: string | nu
           </View>
         </View>
 
-        <Pressable style={styles.fab}>
+        <Pressable style={styles.fab} onPress={() => setIsPostModalVisible(true)}>
           <Ionicons name="add" size={32} color="#FFFFFF" />
         </Pressable>
       </View>
+
+      {/* Kasambahay Post a Service Modal */}
+      <PostServiceScreen
+        visible={isPostModalVisible}
+        onClose={() => setIsPostModalVisible(false)}
+      />
     </View>
   );
 }

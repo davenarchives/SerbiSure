@@ -50,8 +50,23 @@ export function HomeownerApp({
     }
   };
 
+  const topBgColor = activeTab === 'profile' ? '#FFF0DB' : '#F6F5F2';
+
   return (
     <View style={styles.root}>
+      {/* Top Status Bar Solid Background Overlay */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: insets.top,
+          backgroundColor: topBgColor,
+          zIndex: 999,
+        }}
+        pointerEvents="none"
+      />
       <View style={styles.content}>{renderScreen()}</View>
 
       {/* Floating Bottom Navigation */}

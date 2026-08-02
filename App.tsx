@@ -103,7 +103,7 @@ export default function App() {
         <BottomTabNavigator
           role={selectedRole}
           avatarUri={avatarUri}
-          onLogout={() => setFlowState('landing')}
+          onLogout={() => setFlowState('login')}
         />
       )}
     </SafeAreaProvider>
