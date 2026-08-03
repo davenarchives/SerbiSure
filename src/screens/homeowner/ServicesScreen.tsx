@@ -92,7 +92,7 @@ const INITIAL_WORKER_PROFILES: WorkerProfile[] = [
 
 const FILTER_TABS = ['Top Rated', 'Cleaning', 'Cooking'];
 
-export function ServicesScreen({ avatarUri }: { avatarUri?: string | null }) {
+export function ServicesScreen({ avatarUri, onViewProfile }: { avatarUri?: string | null, onViewProfile?: () => void }) {
   const insets = useSafeAreaInsets();
   const today = new Date();
   const dateString = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase();

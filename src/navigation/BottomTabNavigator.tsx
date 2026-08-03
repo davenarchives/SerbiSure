@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../context/LanguageContext';
 
 import { HomeScreen as HomeownerHomeScreen } from '../screens/homeowner/HomeScreen';
 import { ServicesScreen as HomeownerServicesScreen } from '../screens/homeowner/ServicesScreen';
@@ -22,33 +23,57 @@ export type Tab = 'home' | 'services' | 'chats' | 'profile';
 interface BottomTabNavigatorProps {
   role?: Role;
   avatarUri?: string | null;
+  onUpdateAvatar?: (uri: string) => void;
   onLogout?: () => void;
 }
 
-export function BottomTabNavigator({ role = 'homeowner', avatarUri, onLogout }: BottomTabNavigatorProps) {
+export function BottomTabNavigator({ role = 'homeowner', avatarUri, onUpdateAvatar, onLogout }: BottomTabNavigatorProps) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [profileInitialView, setProfileInitialView] = useState<'main' | 'personal_info'>('main');
   const [postJobVisible, setPostJobVisible] = useState(false);
 
   const isKasambahay = role === 'kasambahay';
+
+  const handleOpenProfileView = () => {
+    setProfileInitialView('personal_info');
+    setActiveTab('profile');
+  };
 
   const renderScreen = () => {
     switch (activeTab) {
       case 'home':
         return isKasambahay ? (
-          <KasambahayHomeScreen avatarUri={avatarUri} onAvatarPress={() => setActiveTab('profile')} />
+          <KasambahayHomeScreen avatarUri={avatarUri} onAvatarPress={handleOpenProfileView} onViewProfile={handleOpenProfileView} />
         ) : (
-          <HomeownerHomeScreen avatarUri={avatarUri} onAvatarPress={() => setActiveTab('profile')} />
+          <HomeownerHomeScreen avatarUri={avatarUri} onAvatarPress={handleOpenProfileView} onViewProfile={handleOpenProfileView} />
         );
       case 'services':
-        return isKasambahay ? <KasambahayJobsScreen /> : <HomeownerServicesScreen avatarUri={avatarUri} />;
+        return isKasambahay ? (
+          <KasambahayJobsScreen onViewProfile={handleOpenProfileView} />
+        ) : (
+          <HomeownerServicesScreen avatarUri={avatarUri} onViewProfile={handleOpenProfileView} />
+        );
       case 'chats':
         return isKasambahay ? <KasambahayChatsScreen /> : <HomeownerChatsScreen />;
       case 'profile':
         return isKasambahay ? (
-          <KasambahayProfileScreen avatarUri={avatarUri} onBack={() => setActiveTab('home')} onLogout={onLogout} />
+          <KasambahayProfileScreen
+            avatarUri={avatarUri}
+            initialView={profileInitialView}
+            onUpdateAvatar={onUpdateAvatar}
+            onBack={() => setActiveTab('home')}
+            onLogout={onLogout}
+          />
         ) : (
-          <HomeownerProfileScreen avatarUri={avatarUri} onBack={() => setActiveTab('home')} onLogout={onLogout} />
+          <HomeownerProfileScreen
+            avatarUri={avatarUri}
+            initialView={profileInitialView}
+            onUpdateAvatar={onUpdateAvatar}
+            onBack={() => setActiveTab('home')}
+            onLogout={onLogout}
+          />
         );
     }
   };
@@ -73,7 +98,7 @@ export function BottomTabNavigator({ role = 'homeowner', avatarUri, onLogout }: 
       <View style={styles.content}>{renderScreen()}</View>
 
       {/* Floating Bottom Navigation */}
-      <View style={[styles.navContainer, { bottom: Math.max(insets.bottom + 10, 20) }]}>
+      <View style={[styles.navContainer, { bottom: Math.max(insets.bottom + 24, 38) }]}>
         <View style={styles.tabBar}>
           <View style={styles.tabItem}>
             <Pressable

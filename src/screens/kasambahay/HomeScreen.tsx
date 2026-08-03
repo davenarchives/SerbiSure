@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View, Image, ScrollView, Pressable, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../../context/LanguageContext';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
 
@@ -57,8 +58,9 @@ const MOCK_JOBS: JobOffer[] = [
   },
 ];
 
-export function HomeScreen({ avatarUri, onAvatarPress }: { avatarUri?: string | null; onAvatarPress?: () => void }) {
+export function HomeScreen({ avatarUri, onAvatarPress, onViewProfile }: { avatarUri?: string | null; onAvatarPress?: () => void; onViewProfile?: () => void }) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const [selectedJob, setSelectedJob] = useState<JobOffer | null>(null);
   const [appliedJobs, setAppliedJobs] = useState<number[]>([]);
 
@@ -99,15 +101,15 @@ export function HomeScreen({ avatarUri, onAvatarPress }: { avatarUri?: string | 
           </Pressable>
           <View style={styles.greetingTextContainer}>
             <Text style={styles.dateText}>{dateString}</Text>
-            <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>Good day, Kasambahay!</Text>
+            <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>{t.greeting}, Kasambahay!</Text>
           </View>
           <Ionicons name="options-outline" size={28} color="#333" />
         </View>
 
         {/* Section Header */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Job Offering</Text>
-          <Text style={styles.seeAllText}>See All</Text>
+          <Text style={styles.sectionTitle} numberOfLines={1} adjustsFontSizeToFit>{t.popularServices}</Text>
+          <Text style={styles.seeAllText}>{t.viewAll}</Text>
         </View>
 
         {/* Job List */}
@@ -117,12 +119,14 @@ export function HomeScreen({ avatarUri, onAvatarPress }: { avatarUri?: string | 
             return (
               <Pressable key={job.id} style={styles.jobCard} onPress={() => setSelectedJob(job)}>
                 <View style={styles.jobHeader}>
-                  <Image source={{ uri: job.avatar }} style={styles.employerAvatar} />
+                  <Pressable onPress={onViewProfile}>
+                    <Image source={{ uri: job.avatar }} style={styles.employerAvatar} />
+                  </Pressable>
                   <View style={styles.jobEmployerInfo}>
-                    <View style={styles.nameRow}>
+                    <Pressable style={styles.nameRow} onPress={onViewProfile}>
                       <Text style={styles.employerName}>{job.employerName}</Text>
                       <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginLeft: 4 }} />
-                    </View>
+                    </Pressable>
                     <Text style={styles.postTime}>{job.time}</Text>
 
                     <View style={styles.tagsRow}>
@@ -302,17 +306,20 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     paddingHorizontal: 24,
     marginTop: 20,
     marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 22,
+    flex: 1,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1A1A1A',
+    marginRight: 12,
   },
   seeAllText: {
+    flexShrink: 0,
     fontSize: 13,
     color: '#FFB43B',
     fontWeight: '600',
