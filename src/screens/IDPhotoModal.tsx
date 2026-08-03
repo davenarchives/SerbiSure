@@ -1,4 +1,4 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -54,30 +54,46 @@ function IDCardWrong() {
 
 export function IDPhotoModal({ visible, onClose, onPickedImage }: IDPhotoModalProps) {
   const handleTakePhoto = async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) return;
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'] as any,
-      quality: 0.85,
-      allowsEditing: false,
-    });
-    if (!result.canceled && result.assets[0]) {
-      onPickedImage(result.assets[0].uri);
-      onClose();
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Camera Permission Needed', 'Please allow camera access in your device settings to take a photo.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        allowsEditing: true,
+      });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        onPickedImage(result.assets[0].uri);
+        onClose();
+      }
+    } catch (error) {
+      console.log('Error taking photo:', error);
+      Alert.alert('Camera Error', 'Unable to open camera. You can also tap "Upload Photo" to select a photo from your gallery.');
     }
   };
 
   const handleUploadPhoto = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'] as any,
-      quality: 0.85,
-      allowsEditing: false,
-    });
-    if (!result.canceled && result.assets[0]) {
-      onPickedImage(result.assets[0].uri);
-      onClose();
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Gallery Permission Needed', 'Please allow gallery access in your device settings to choose a photo.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        allowsEditing: true,
+      });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        onPickedImage(result.assets[0].uri);
+        onClose();
+      }
+    } catch (error) {
+      console.log('Error uploading photo:', error);
+      Alert.alert('Gallery Error', 'Unable to open photo library. Please try again.');
     }
   };
   return (
