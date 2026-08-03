@@ -2,11 +2,13 @@ import React from 'react';
 import { StyleSheet, Text, View, Image, ScrollView, TextInput, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useLanguage } from '../../context/LanguageContext';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
 
-export function HomeScreen({ avatarUri, onAvatarPress }: { avatarUri?: string | null, onAvatarPress?: () => void }) {
+export function HomeScreen({ avatarUri, onAvatarPress, onViewProfile }: { avatarUri?: string | null, onAvatarPress?: () => void, onViewProfile?: () => void }) {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   
   const today = new Date();
   const dateString = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase();
@@ -38,7 +40,7 @@ export function HomeScreen({ avatarUri, onAvatarPress }: { avatarUri?: string | 
           </Pressable>
           <View style={styles.greetingTextContainer}>
             <Text style={styles.dateText}>{dateString}</Text>
-            <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>Good day, Homeowner!</Text>
+            <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>{t.greeting}, Homeowner!</Text>
           </View>
           <Ionicons name="options-outline" size={28} color="#333" />
         </View>
@@ -47,7 +49,7 @@ export function HomeScreen({ avatarUri, onAvatarPress }: { avatarUri?: string | 
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color="#333" style={styles.searchIcon} />
           <TextInput 
-            placeholder="What help do you need today?"
+            placeholder={t.searchPlaceholder}
             placeholderTextColor="#333"
             style={styles.searchInput}
           />
@@ -63,8 +65,8 @@ export function HomeScreen({ avatarUri, onAvatarPress }: { avatarUri?: string | 
 
         {/* Top Rated Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Top Rated</Text>
-          <Text style={styles.seeAllText}>See all</Text>
+          <Text style={styles.sectionTitle} numberOfLines={1} adjustsFontSizeToFit>{t.popularServices}</Text>
+          <Text style={styles.seeAllText}>{t.viewAll}</Text>
         </View>
 
         <View style={styles.workerList}>
@@ -76,6 +78,7 @@ export function HomeScreen({ avatarUri, onAvatarPress }: { avatarUri?: string | 
             reviews="(159 reviews)"
             time="Posted 3h ago"
             avatar="https://i.pravatar.cc/150?u=liza"
+            onViewProfile={onViewProfile}
           />
           <WorkerCard 
             name="Bald Seki"
@@ -85,6 +88,7 @@ export function HomeScreen({ avatarUri, onAvatarPress }: { avatarUri?: string | 
             reviews="(121 reviews)"
             time="Posted 10h ago"
             avatar="https://i.pravatar.cc/150?u=bald"
+            onViewProfile={onViewProfile}
           />
         </View>
 
@@ -106,10 +110,10 @@ function CategoryItem({ icon, label }: { icon: any, label: string }) {
   );
 }
 
-function WorkerCard({ name, role, years, rating, reviews, time, avatar }: any) {
+function WorkerCard({ name, role, years, rating, reviews, time, avatar, onViewProfile }: any) {
   return (
     <View style={styles.workerCard}>
-      <View style={styles.workerHeader}>
+      <Pressable style={styles.workerHeader} onPress={onViewProfile}>
         <Image source={{ uri: avatar }} style={styles.workerAvatar} />
         <View style={styles.workerInfo}>
           <View style={styles.workerNameRow}>
@@ -123,8 +127,8 @@ function WorkerCard({ name, role, years, rating, reviews, time, avatar }: any) {
           </View>
         </View>
         <Text style={styles.workerTime}>{time}</Text>
-      </View>
-      <Pressable style={styles.viewProfileBtn}>
+      </Pressable>
+      <Pressable style={styles.viewProfileBtn} onPress={onViewProfile}>
         <Text style={styles.viewProfileText}>View Profile</Text>
       </Pressable>
     </View>
@@ -219,16 +223,19 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     paddingHorizontal: 24,
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: '500',
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '600',
     color: '#1A1A1A',
+    marginRight: 12,
   },
   seeAllText: {
+    flexShrink: 0,
     fontSize: 13,
     color: '#333',
   },

@@ -1,18 +1,56 @@
-import React from 'react';
-import { StyleSheet, Text, View, Image, ScrollView, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, View, Image, ScrollView, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useLanguage, type Language } from '../../context/LanguageContext';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
 
-export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: string | null, onBack?: () => void, onLogout?: () => void }) {
+export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar, onBack, onLogout }: { avatarUri?: string | null, initialView?: 'main' | 'personal_info', onUpdateAvatar?: (uri: string) => void, onBack?: () => void, onLogout?: () => void }) {
   const insets = useSafeAreaInsets();
-  const [currentView, setCurrentView] = React.useState<'main' | 'personal_info'>('main');
+  const { language, setLanguage, t } = useLanguage();
+  const [currentView, setCurrentView] = useState<'main' | 'personal_info'>(initialView);
+  const [isLanguageExpanded, setIsLanguageExpanded] = useState(false);
+  const [localAvatar, setLocalAvatar] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (initialView) {
+      setCurrentView(initialView);
+    }
+  }, [initialView]);
+
+  const handlePickImage = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Permission to access photo gallery is required!');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0]?.uri;
+        if (uri) {
+          setLocalAvatar(uri);
+          onUpdateAvatar?.(uri);
+        }
+      }
+    } catch (e) {
+      console.log('Error picking profile picture:', e);
+    }
+  };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, currentView === 'personal_info' && { backgroundColor: '#F9F8F6' }]}>
       {/* Top Status Bar Spacer */}
-      <View style={{ height: insets.top, backgroundColor: '#FFF0DB', zIndex: 10 }} />
+      <View style={{ height: insets.top, backgroundColor: currentView === 'personal_info' ? 'transparent' : '#FFF0DB', zIndex: 10 }} />
       <ScrollView 
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingTop: 0 }]}
@@ -26,11 +64,11 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
             style={{ width: '100%', height: 220, position: 'absolute', top: 0 }}
           />
         ) : (
-          <View style={[styles.headerBg, { height: 200 }]} />
+          <View style={[styles.headerBg, { height: 160 }]} />
         )}
 
         {/* Header Row (Scrolls with content) */}
-        <View style={[styles.headerRow, { marginTop: 10, marginBottom: 30 }]}>
+        <View style={[styles.headerRow, { marginTop: 10, marginBottom: 16 }]}>
           <Pressable onPress={() => currentView === 'personal_info' ? setCurrentView('main') : onBack?.()}>
             <Ionicons 
               name="arrow-back" 
@@ -46,12 +84,15 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
           <React.Fragment>
             {/* Beige Info Card */}
             <View style={styles.personalInfoCard}>
-              <View style={styles.personalAvatarWrapper}>
+              <Pressable style={styles.personalAvatarWrapper} onPress={handlePickImage}>
                 <Image 
-                  source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }} 
+                  source={{ uri: localAvatar || avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }} 
                   style={styles.personalAvatar} 
                 />
-              </View>
+                <View style={styles.editIconBadge}>
+                  <Ionicons name="camera" size={12} color="#FFF" />
+                </View>
+              </Pressable>
               
               <View style={styles.personalNameRow}>
                 <Text style={styles.personalName}>Homeowner</Text>
@@ -67,11 +108,11 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
               <View style={styles.sentimentDivider} />
               
               <View style={styles.sentimentRow}>
-                <Text style={styles.sentimentLabel}>Worker Sentiment</Text>
+                <Text style={styles.sentimentLabel}>{t.workerSentiment}</Text>
                 <View style={styles.sentimentBarBg}>
                   <View style={styles.sentimentBarFill} />
                 </View>
-                <Text style={styles.sentimentScore}>86% Positive</Text>
+                <Text style={styles.sentimentScore}>86% {t.positive}</Text>
               </View>
 
               <View style={styles.tagsContainer}>
@@ -84,7 +125,7 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
 
             {/* About Section */}
             <View style={styles.aboutSection}>
-              <Text style={styles.sectionTitle}>About Homeowner</Text>
+              <Text style={styles.sectionTitle}>{t.aboutTitle} Homeowner</Text>
               <Text style={styles.aboutText}>
                 I'm a homeowner in Cagayan de Oro with two kids and a pet cat. I'm looking for a reliable nanny who can help care for my children, assist with daily routines, and be comfortable around pets while keeping our home safe and organized.
               </Text>
@@ -93,8 +134,8 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
             {/* Reviews Section */}
             <View style={styles.reviewsSection}>
               <View style={styles.reviewsHeader}>
-                <Text style={styles.sectionTitle}>Recent Reviews</Text>
-                <Text style={styles.viewAllText}>View All 3</Text>
+                <Text style={[styles.sectionTitle, { flex: 1, marginRight: 12, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>{t.recentReviews}</Text>
+                <Text style={[styles.viewAllText, { flexShrink: 0 }]}>{t.viewAll} 3</Text>
               </View>
 
               <View style={styles.reviewCard}>
@@ -103,7 +144,7 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
                     {[1,2,3,4,5].map(i => <Ionicons key={i} name="star" size={14} color="#FFB43B" style={{marginRight: 2}} />)}
                   </View>
                   <View style={styles.positiveBadge}>
-                    <Text style={styles.positiveBadgeText}>Positive</Text>
+                    <Text style={styles.positiveBadgeText}>{t.positive}</Text>
                   </View>
                 </View>
                 <Text style={styles.reviewText}>
@@ -114,20 +155,20 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
             </View>
 
             {/* Bottom padding for tab bar */}
-            <View style={{ height: 100 }} />
+            <View style={{ height: 90 }} />
           </React.Fragment>
         ) : (
           <React.Fragment>
             <View style={styles.profileInfoContainer}>
-              <View style={styles.avatarWrapper}>
+              <Pressable style={styles.avatarWrapper} onPress={handlePickImage}>
                 <Image 
-                  source={{ uri: avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }} 
+                  source={{ uri: localAvatar || avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }} 
                   style={styles.avatar} 
                 />
                 <View style={styles.editIconBadge}>
-                  <Ionicons name="pencil" size={12} color="#FFF" />
+                  <Ionicons name="camera" size={12} color="#FFF" />
                 </View>
-              </View>
+              </Pressable>
               
               <View style={styles.profileDetails}>
                 <View style={styles.nameRow}>
@@ -144,34 +185,66 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
             <View style={styles.settingsCard}>
               <SettingsItem 
                 icon="person-outline" 
-                label="Personal Info" 
+                label={t.personalInfo} 
                 onPress={() => setCurrentView('personal_info')} 
               />
               <View style={styles.divider} />
-              <SettingsItem icon="lock-closed-outline" label="Passwords & Security" />
+              <SettingsItem icon="lock-closed-outline" label={t.passwordsSecurity} />
               <View style={styles.divider} />
-              <SettingsItem icon="checkmark-circle-outline" label="Get Verified" iconColor="#4CAF50" />
+              <SettingsItem icon="checkmark-circle-outline" label={t.getVerified} iconColor="#4CAF50" />
               
               <View style={styles.sectionSpacing} />
               
-              <SettingsItem icon="notifications-outline" label="Notifications" />
+              <SettingsItem icon="notifications-outline" label={t.notifications} />
               <View style={styles.divider} />
               <SettingsItem 
                 icon="globe-outline" 
-                label="Language" 
+                label={t.language} 
+                zIndex={1000}
                 rightComponent={
-                  <View style={styles.languageSelector}>
-                    <Text style={styles.languageText}>English</Text>
-                    <Ionicons name="chevron-down" size={14} color="#888" />
+                  <View style={{ position: 'relative', zIndex: 9999 }}>
+                    <Pressable 
+                      style={styles.languageSelector} 
+                      onPress={() => setIsLanguageExpanded(!isLanguageExpanded)}
+                    >
+                      <Text style={styles.languageText}>{language}</Text>
+                      <Ionicons name={isLanguageExpanded ? "chevron-up" : "chevron-down"} size={14} color="#888" />
+                    </Pressable>
+
+                    {isLanguageExpanded && (
+                      <View style={styles.floatingPillDropdown}>
+                        {(['English', 'Tagalog', 'Cebuano'] as Language[]).map((lang) => (
+                          <Pressable
+                            key={lang}
+                            style={[
+                              styles.floatingPillRow,
+                              language === lang && styles.floatingPillRowActive
+                            ]}
+                            onPress={() => {
+                              setLanguage(lang);
+                              setIsLanguageExpanded(false);
+                            }}
+                          >
+                            <Text style={[
+                              styles.floatingPillText,
+                              language === lang && styles.floatingPillTextActive
+                            ]}>
+                              {lang}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
                   </View>
                 } 
+                onPress={() => setIsLanguageExpanded(!isLanguageExpanded)}
               />
               
               <View style={styles.sectionSpacing} />
               
-              <SettingsItem icon="help-circle-outline" label="About Us" />
+              <SettingsItem icon="help-circle-outline" label={t.aboutUs} />
               <View style={styles.divider} />
-              <SettingsItem icon="shield-checkmark-outline" label="Privacy Policy" />
+              <SettingsItem icon="shield-checkmark-outline" label={t.privacyPolicy} />
               
               <View style={styles.sectionSpacing} />
               
@@ -185,13 +258,13 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
                 {({ pressed }) => (
                   <>
                     <Ionicons name="log-out-outline" size={24} color={pressed ? "#E74C3C" : "#FFB43B"} style={styles.settingsIcon} />
-                    <Text style={[styles.settingsLabel, { color: pressed ? '#E74C3C' : '#333' }]}>Log out</Text>
+                    <Text style={[styles.settingsLabel, { color: pressed ? '#E74C3C' : '#333' }]}>{t.logout}</Text>
                   </>
                 )}
               </Pressable>
               
               {/* Bottom padding for tab bar */}
-              <View style={{ height: 100 }} />
+              <View style={{ height: 85 }} />
             </View>
           </React.Fragment>
         )}
@@ -200,12 +273,14 @@ export function ProfileScreen({ avatarUri, onBack, onLogout }: { avatarUri?: str
   );
 }
 
-function SettingsItem({ icon, label, iconColor = "#FFB43B", hideChevron = false, rightComponent, onPress }: any) {
+function SettingsItem({ icon, label, iconColor = "#FFB43B", hideChevron = false, rightComponent, onPress, zIndex }: any) {
   return (
-    <Pressable style={styles.settingsItem} onPress={onPress}>
-      <Ionicons name={icon} size={24} color={iconColor} style={styles.settingsIcon} />
-      <Text style={styles.settingsLabel}>{label}</Text>
-      {rightComponent ? rightComponent : (!hideChevron && <Ionicons name="chevron-forward" size={20} color="#FFB43B" />)}
+    <Pressable style={[styles.settingsItem, zIndex ? { zIndex, elevation: zIndex } : undefined]} onPress={onPress}>
+      <View style={styles.iconContainer}>
+        <Ionicons name={icon} size={20} color={iconColor} />
+      </View>
+      <Text style={styles.settingsLabel} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
+      {rightComponent ? rightComponent : (!hideChevron && <Ionicons name="chevron-forward" size={16} color="#FFB43B" />)}
     </Pressable>
   );
 }
@@ -213,14 +288,14 @@ function SettingsItem({ icon, label, iconColor = "#FFB43B", hideChevron = false,
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9F8F6',
+    backgroundColor: '#FFF0DB',
   },
   headerBg: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFECCB',
+    backgroundColor: '#FFF0DB',
   },
   scrollContent: {
     flexGrow: 1,
@@ -237,8 +312,8 @@ const styles = StyleSheet.create({
   },
   profileInfoContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 30,
-    marginBottom: 30,
+    paddingHorizontal: 24,
+    marginBottom: 16,
     alignItems: 'center',
   },
   avatarWrapper: {
@@ -294,52 +369,99 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
   settingsCard: {
+    flex: 1,
     backgroundColor: '#FFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 24,
-    paddingTop: 30,
+    paddingTop: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 5,
   },
+  iconContainer: {
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
   settingsItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 13,
   },
   settingsIcon: {
-    marginRight: 16,
+    marginRight: 14,
   },
   settingsLabel: {
     flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#333',
+    fontSize: 13.5,
+    fontWeight: '400',
+    color: '#2A2A2A',
+    marginRight: 10,
   },
   divider: {
     height: 1,
-    backgroundColor: '#F0F0F0',
-    marginLeft: 40,
+    backgroundColor: '#EFECE6',
+    marginLeft: 34,
   },
   sectionSpacing: {
-    height: 40,
+    height: 16,
   },
   languageSelector: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: '#FFB43B',
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    backgroundColor: '#FFF',
+    minWidth: 95,
   },
   languageText: {
     fontSize: 12,
     color: '#333',
-    marginRight: 8,
+    marginRight: 6,
+    fontWeight: '500',
+  },
+  floatingPillDropdown: {
+    position: 'absolute',
+    top: 28,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFB43B',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 25,
+    zIndex: 9999,
+    overflow: 'hidden',
+  },
+  floatingPillRow: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+  },
+  floatingPillRowActive: {
+    backgroundColor: '#FFF4E5',
+  },
+  floatingPillText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '500',
+  },
+  floatingPillTextActive: {
+    color: '#FFB43B',
+    fontWeight: '700',
   },
   // Personal Info Styles
   personalInfoCard: {
