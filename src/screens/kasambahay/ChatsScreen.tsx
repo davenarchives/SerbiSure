@@ -2,12 +2,14 @@ import React from 'react';
 import { StyleSheet, Text, View, Image, ScrollView, TextInput, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../../context/LanguageContext';
 
 import { ChatDetailScreen } from '../ChatDetailScreen';
 import { chatStore, ChatConversation } from '../../store/chatStore';
 
 export function ChatsScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const [chatList, setChatList] = React.useState<ChatConversation[]>(chatStore.getChats());
   const [activeChat, setActiveChat] = React.useState<{
     visible: boolean;
@@ -39,11 +41,11 @@ export function ChatsScreen() {
       <View style={{ height: insets.top, backgroundColor: '#FFECCB', zIndex: 10 }} />
       {/* Top Banner */}
       <View style={[styles.header, { paddingTop: 16 }]}>
-        <Text style={styles.headerTitle}>Messages</Text>
+        <Text style={styles.headerTitle}>{t.chatsHeader}</Text>
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={18} color="#888" style={styles.searchIcon} />
           <TextInput
-            placeholder="Search Conversations"
+            placeholder={t.searchChats}
             placeholderTextColor="#888"
             style={styles.searchInput}
           />
