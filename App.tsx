@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { LanguageProvider } from './src/context/LanguageContext';
 
 import {
   LandingScreen,
@@ -35,77 +36,83 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style={flowState === 'registration3' ? 'light' : 'dark'} />
+      <LanguageProvider>
+        <StatusBar style={flowState === 'registration3' ? 'light' : 'dark'} />
 
-      {/* Step 1: Landing Page */}
-      {flowState === 'landing' && (
-        <LandingScreen
-          onGetStarted={() => setFlowState('user_selection')}
-          onLogin={() => setFlowState('login')}
-        />
-      )}
+        {/* Step 1: Landing Page */}
+        {flowState === 'landing' && (
+          <LandingScreen
+            onGetStarted={() => setFlowState('user_selection')}
+            onLogin={() => setFlowState('login')}
+          />
+        )}
 
-      {/* Step 1.5: Login Screen */}
-      {flowState === 'login' && (
-        <LoginScreen
-          onLoginSuccess={() => setFlowState('dashboard')}
-          onSignUp={() => setFlowState('user_selection')}
-          onBack={() => setFlowState('landing')}
-        />
-      )}
+        {/* Step 1.5: Login Screen */}
+        {flowState === 'login' && (
+          <LoginScreen
+            onLoginSuccess={() => setFlowState('dashboard')}
+            onSignUp={() => setFlowState('user_selection')}
+            onBack={() => setFlowState('landing')}
+          />
+        )}
 
-      {/* Step 2: User Selection (Homeowner / Kasambahay) */}
-      {flowState === 'user_selection' && (
-        <UserSelectionScreen
-          onSelectRole={handleSelectRole}
-          onBack={() => setFlowState('landing')}
-        />
-      )}
+        {/* Step 2: User Selection (Homeowner / Kasambahay) */}
+        {flowState === 'user_selection' && (
+          <UserSelectionScreen
+            onSelectRole={handleSelectRole}
+            onBack={() => setFlowState('landing')}
+          />
+        )}
 
-      {/* Step 3: Registration 1 - Account Form Details */}
-      {flowState === 'registration1' && (
-        <RegistrationStep1
-          role={selectedRole}
-          onBack={() => setFlowState('user_selection')}
-          onNext={() => setFlowState('registration2')}
-          onCancel={() => setFlowState('landing')}
-        />
-      )}
+        {/* Step 3: Registration 1 - Account Form Details */}
+        {flowState === 'registration1' && (
+          <RegistrationStep1
+            role={selectedRole}
+            onBack={() => setFlowState('user_selection')}
+            onNext={() => setFlowState('registration2')}
+            onCancel={() => setFlowState('landing')}
+          />
+        )}
 
-      {/* Step 4: Registration 2 - Verify Identity / Document Upload */}
-      {flowState === 'registration2' && (
-        <RegistrationStep2
-          role={selectedRole}
-          onBack={() => setFlowState('registration1')}
-          onNext={() => setFlowState('registration3')}
-          onCancel={() => setFlowState('landing')}
-          onSkip={() => setFlowState('dashboard')}
-        />
-      )}
+        {/* Step 4: Registration 2 - Verify Identity / Document Upload */}
+        {flowState === 'registration2' && (
+          <RegistrationStep2
+            role={selectedRole}
+            onBack={() => setFlowState('registration1')}
+            onNext={() => setFlowState('registration3')}
+            onCancel={() => setFlowState('landing')}
+            onSkip={() => setFlowState('dashboard')}
+          />
+        )}
 
-      {/* Step 5: Registration 3 - Take a Selfie / Liveness Verification */}
-      {flowState === 'registration3' && (
-        <RegistrationStep3
-          onVerified={(result) => {
-            if (result.selfiePath) {
-              setAvatarUri(`file://${result.selfiePath}`);
-            }
-            setFlowState('dashboard');
-          }}
-          onBack={() => setFlowState('registration2')}
-          onCancel={() => setFlowState('landing')}
-          onSkip={() => setFlowState('dashboard')}
-        />
-      )}
+        {/* Step 5: Registration 3 - Take a Selfie / Liveness Verification */}
+        {flowState === 'registration3' && (
+          <RegistrationStep3
+            onVerified={(result) => {
+              if (result.selfiePath) {
+                const uri = result.selfiePath.startsWith('data:') || result.selfiePath.startsWith('file:')
+                  ? result.selfiePath
+                  : `file://${result.selfiePath}`;
+                setAvatarUri(uri);
+              }
+              setFlowState('dashboard');
+            }}
+            onBack={() => setFlowState('registration2')}
+            onCancel={() => setFlowState('landing')}
+            onSkip={() => setFlowState('dashboard')}
+          />
+        )}
 
-      {/* Step 6: Main Dashboard (Bottom Tab Navigator - Home, Services/Jobs, Chats, Profile) */}
-      {flowState === 'dashboard' && (
-        <BottomTabNavigator
-          role={selectedRole}
-          avatarUri={avatarUri}
-          onLogout={() => setFlowState('login')}
-        />
-      )}
+        {/* Step 6: Main Dashboard (Bottom Tab Navigator - Home, Services/Jobs, Chats, Profile) */}
+        {flowState === 'dashboard' && (
+          <BottomTabNavigator
+            role={selectedRole}
+            avatarUri={avatarUri}
+            onUpdateAvatar={(uri: string) => setAvatarUri(uri)}
+            onLogout={() => setFlowState('login')}
+          />
+        )}
+      </LanguageProvider>
     </SafeAreaProvider>
   );
 }
