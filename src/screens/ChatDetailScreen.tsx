@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,14 +10,19 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 
 export interface ChatMessage {
   id: string;
   sender: 'other' | 'me' | 'system';
   text?: string;
+  imageUri?: string;
+  reaction?: string;
   time: string;
   avatar?: string;
   bookingInfo?: {
@@ -38,6 +43,51 @@ interface ChatDetailScreenProps {
   initialMessage?: string;
 }
 
+const REACTION_OPTIONS = ['❤️', '👍', '😂', '😭', '😮'];
+
+function SmoothReactionPill({ align, onSelect }: { align: 'left' | 'right'; onSelect: (emoji: string) => void }) {
+  const scaleAnim = useRef(new Animated.Value(0.3)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 6,
+        tension: 120,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacityAnim, scaleAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        align === 'left' ? styles.inlineReactionPillLeft : styles.inlineReactionPillRight,
+        {
+          opacity: opacityAnim,
+          transform: [{ scale: scaleAnim }],
+        },
+      ]}
+    >
+      {REACTION_OPTIONS.map((emoji) => (
+        <Pressable
+          key={emoji}
+          style={({ pressed }) => [styles.inlineEmojiItem, pressed && { transform: [{ scale: 1.3 }] }]}
+          onPress={() => onSelect(emoji)}
+        >
+          <Text style={styles.inlineEmojiText}>{emoji}</Text>
+        </Pressable>
+      ))}
+    </Animated.View>
+  );
+}
+
 export function ChatDetailScreen({
   visible,
   onClose,
@@ -52,6 +102,8 @@ export function ChatDetailScreen({
 
   const [inputMessage, setInputMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+  const [reactingMessageId, setReactingMessageId] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (visible) {
@@ -117,7 +169,6 @@ export function ChatDetailScreen({
       time: timeString,
     };
 
-    // Remove typing indicator if present, add message, then re-add typing indicator or keep message
     setMessages((prev) => {
       const nonTyping = prev.filter((m) => !m.isTyping);
       return [...nonTyping, newMessage];
@@ -128,6 +179,63 @@ export function ChatDetailScreen({
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
+  };
+
+  const handlePickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Gallery permission is required to choose photos.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        const imageUri = result.assets[0].uri;
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const formattedHours = hours % 12 || 12;
+        const timeString = `${formattedHours}:${minutes} ${ampm}`;
+
+        const newMsg: ChatMessage = {
+          id: Date.now().toString(),
+          sender: 'me',
+          imageUri: imageUri,
+          time: timeString,
+        };
+
+        setMessages((prev) => {
+          const nonTyping = prev.filter((m) => !m.isTyping);
+          return [...nonTyping, newMsg];
+        });
+
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    } catch (err) {
+      console.log('Error choosing image in chat:', err);
+      Alert.alert('Gallery Error', 'Could not open photo gallery. Please try again.');
+    }
+  };
+
+  const handleSelectReaction = (emoji: string) => {
+    if (!reactingMessageId) return;
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === reactingMessageId
+          ? { ...msg, reaction: msg.reaction === emoji ? undefined : emoji }
+          : msg
+      )
+    );
+    setReactingMessageId(null);
   };
 
   return (
@@ -145,7 +253,7 @@ export function ChatDetailScreen({
           <View style={styles.headerInfo}>
             <View style={styles.avatarWrapper}>
               <Image source={{ uri: contactAvatar }} style={styles.headerAvatar} />
-              {isOnline && <View style={styles.onlineDot} />}
+              {isOnline ? <View style={styles.onlineDot} /> : null}
             </View>
             <View style={styles.headerTextCol}>
               <Text style={styles.contactName}>{contactName}</Text>
@@ -160,74 +268,121 @@ export function ChatDetailScreen({
           </Pressable>
         </View>
 
-        {/* Chat Body */}
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.chatBody}
-          contentContainerStyle={styles.chatBodyContent}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
+        {/* Chat Body Container with backdrop press to dismiss reaction interface */}
+        <Pressable 
+          style={{ flex: 1 }} 
+          onPress={() => {
+            if (reactingMessageId) {
+              setReactingMessageId(null);
+            }
+          }}
         >
-          {/* Date Separator Pill */}
-          <View style={styles.datePill}>
-            <Text style={styles.datePillText}>Today, May 07</Text>
-          </View>
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.chatBody}
+            contentContainerStyle={styles.chatBodyContent}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
+          >
+            {/* Date Separator Pill */}
+            <View style={styles.datePill}>
+              <Text style={styles.datePillText}>Today, May 07</Text>
+            </View>
 
-          {/* Messages */}
-          {messages.map((item) => {
-            if (item.sender === 'system' && item.bookingInfo) {
-              return (
-                <View key={item.id} style={styles.systemCardContainer}>
-                  <View style={styles.bookingCard}>
-                    <View style={styles.bookingTagRow}>
-                      <Ionicons name="document-text-outline" size={16} color="#FFA51F" />
-                      <Text style={styles.bookingTagText}>{item.bookingInfo.title}</Text>
+            {/* Messages */}
+            {messages.map((item) => {
+              if (item.sender === 'system' && item.bookingInfo) {
+                return (
+                  <View key={item.id} style={styles.systemCardContainer}>
+                    <View style={styles.bookingCard}>
+                      <View style={styles.bookingTagRow}>
+                        <Ionicons name="document-text-outline" size={16} color="#FFA51F" />
+                        <Text style={styles.bookingTagText}>{item.bookingInfo.title}</Text>
+                      </View>
+                      <Text style={styles.bookingStartTitle}>Start: {item.bookingInfo.startDate}</Text>
+                      <Text style={styles.bookingDetails}>{item.bookingInfo.details}</Text>
+                      <Pressable style={styles.viewBtn}>
+                        <Text style={styles.viewBtnText}>View ➔</Text>
+                      </Pressable>
                     </View>
-                    <Text style={styles.bookingStartTitle}>Start: {item.bookingInfo.startDate}</Text>
-                    <Text style={styles.bookingDetails}>{item.bookingInfo.details}</Text>
-                    <Pressable style={styles.viewBtn}>
-                      <Text style={styles.viewBtnText}>View ➔</Text>
-                    </Pressable>
+                    <Text style={styles.systemTimeText}>{item.time}</Text>
                   </View>
-                  <Text style={styles.systemTimeText}>{item.time}</Text>
+                );
+              }
+
+              if (item.sender === 'other') {
+                return (
+                  <View key={item.id} style={styles.leftMessageRow}>
+                    <Image source={{ uri: item.avatar || contactAvatar }} style={styles.msgAvatar} />
+                    <View style={styles.leftMessageCol}>
+                      {reactingMessageId === item.id ? (
+                        <SmoothReactionPill align="left" onSelect={handleSelectReaction} />
+                      ) : null}
+
+                      <Pressable onLongPress={() => setReactingMessageId(reactingMessageId === item.id ? null : item.id)}>
+                        <View style={[styles.leftBubble, item.isTyping && styles.typingBubble]}>
+                          {item.imageUri ? (
+                            <Pressable onPress={() => setSelectedImageUri(item.imageUri || null)}>
+                              <Image source={{ uri: item.imageUri }} style={styles.chatImage} resizeMode="contain" />
+                            </Pressable>
+                          ) : null}
+                          {item.text ? (
+                            <Text style={[styles.leftMsgText, item.isTyping && styles.typingText]}>
+                              {item.text}
+                            </Text>
+                          ) : null}
+
+                          {item.reaction ? (
+                            <View style={styles.reactionBadgeLeft}>
+                              <Text style={styles.reactionBadgeText}>{item.reaction}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </Pressable>
+
+                      {item.time ? <Text style={styles.leftTimeText}>{item.time}</Text> : null}
+                    </View>
+                  </View>
+                );
+              }
+
+              // Right Message (me)
+              return (
+                <View key={item.id} style={styles.rightMessageRow}>
+                  {reactingMessageId === item.id ? (
+                    <SmoothReactionPill align="right" onSelect={handleSelectReaction} />
+                  ) : null}
+
+                  <Pressable onLongPress={() => setReactingMessageId(reactingMessageId === item.id ? null : item.id)}>
+                    <View style={styles.rightBubble}>
+                      {item.imageUri ? (
+                        <Pressable onPress={() => setSelectedImageUri(item.imageUri || null)}>
+                          <Image source={{ uri: item.imageUri }} style={styles.chatImage} resizeMode="contain" />
+                        </Pressable>
+                      ) : null}
+                      {item.text ? <Text style={styles.rightMsgText}>{item.text}</Text> : null}
+
+                      {item.reaction ? (
+                        <View style={styles.reactionBadgeRight}>
+                          <Text style={styles.reactionBadgeText}>{item.reaction}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </Pressable>
+
+                  <Text style={styles.rightTimeText}>{item.time}</Text>
                 </View>
               );
-            }
-
-            if (item.sender === 'other') {
-              return (
-                <View key={item.id} style={styles.leftMessageRow}>
-                  <Image source={{ uri: item.avatar || contactAvatar }} style={styles.msgAvatar} />
-                  <View style={styles.leftMessageCol}>
-                    <View style={[styles.leftBubble, item.isTyping && styles.typingBubble]}>
-                      <Text style={[styles.leftMsgText, item.isTyping && styles.typingText]}>
-                        {item.text}
-                      </Text>
-                    </View>
-                    {item.time ? <Text style={styles.leftTimeText}>{item.time}</Text> : null}
-                  </View>
-                </View>
-              );
-            }
-
-            // Right Message (me)
-            return (
-              <View key={item.id} style={styles.rightMessageRow}>
-                <View style={styles.rightBubble}>
-                  <Text style={styles.rightMsgText}>{item.text}</Text>
-                </View>
-                <Text style={styles.rightTimeText}>{item.time}</Text>
-              </View>
-            );
-          })}
-        </ScrollView>
+            })}
+          </ScrollView>
+        </Pressable>
 
         {/* Messenger Style Input Footer */}
         <View style={[styles.inputFooter, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-          <Pressable style={styles.attachBtn}>
+          <Pressable style={styles.attachBtn} onPress={handlePickImage}>
             <Ionicons name="add-circle" size={32} color="#FFB43B" />
           </Pressable>
-          <Pressable style={styles.imageBtn}>
+          <Pressable style={styles.imageBtn} onPress={handlePickImage}>
             <Ionicons name="image-outline" size={22} color="#888" />
           </Pressable>
 
@@ -253,6 +408,33 @@ export function ChatDetailScreen({
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Messenger-Style Full-Screen Image Zoom Viewer Modal */}
+      <Modal
+        visible={!!selectedImageUri}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedImageUri(null)}
+      >
+        <View style={styles.fullImageContainer}>
+          <Pressable style={styles.fullImageBackdrop} onPress={() => setSelectedImageUri(null)} />
+          
+          <Pressable 
+            style={[styles.fullImageCloseBtn, { top: Math.max(insets.top + 10, 30) }]} 
+            onPress={() => setSelectedImageUri(null)}
+          >
+            <Ionicons name="close" size={26} color="#FFFFFF" />
+          </Pressable>
+
+          {selectedImageUri ? (
+            <Image
+              source={{ uri: selectedImageUri }}
+              style={styles.fullImageContent}
+              resizeMode="contain"
+            />
+          ) : null}
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -399,6 +581,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  chatImage: {
+    width: 180,
+    height: 180,
+    borderRadius: 12,
+    marginVertical: 4,
+  },
   rightMsgText: {
     fontSize: 14,
     color: '#1A1A1A',
@@ -500,5 +688,84 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {
     backgroundColor: '#E0E0E0',
+  },
+  fullImageContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImageBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  },
+  fullImageCloseBtn: {
+    position: 'absolute',
+    left: 20,
+    zIndex: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullImageContent: {
+    width: '95%',
+    height: '82%',
+  },
+  inlineReactionPillLeft: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 6,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+  },
+  inlineReactionPillRight: {
+    flexDirection: 'row',
+    alignSelf: 'flex-end',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 6,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+  },
+  inlineEmojiItem: {
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  inlineEmojiText: {
+    fontSize: 20,
+  },
+  reactionBadgeLeft: {
+    position: 'absolute',
+    bottom: -10,
+    right: -4,
+    zIndex: 5,
+  },
+  reactionBadgeRight: {
+    position: 'absolute',
+    bottom: -10,
+    right: -4,
+    zIndex: 5,
+  },
+  reactionBadgeText: {
+    fontSize: 16,
   },
 });
