@@ -80,12 +80,12 @@ export function getHeadPoseDirection(face: FaceLandmarks): HeadPoseDirection {
   const yawAngle = face.signals?.yawAngle;
 
   if (typeof yawAngle === 'number') {
-    if (yawAngle > 12) {
-      return 'left';
+    if (yawAngle > 10) {
+      return 'right';
     }
 
-    if (yawAngle < -12) {
-      return 'right';
+    if (yawAngle < -10) {
+      return 'left';
     }
 
     return 'center';
@@ -102,14 +102,13 @@ export function getHeadPoseDirection(face: FaceLandmarks): HeadPoseDirection {
   const faceMidline = (leftCheek.x + rightCheek.x) / 2;
   const faceWidth = Math.max(Math.abs(rightCheek.x - leftCheek.x), 1);
   const rawOffset = (nose.x - faceMidline) / faceWidth;
-  const offset = face.signals?.mirrored ? -rawOffset : rawOffset;
 
-  if (offset > HEAD_TURN_THRESHOLD) {
-    return 'right';
+  if (rawOffset > HEAD_TURN_THRESHOLD) {
+    return 'left';
   }
 
-  if (offset < -HEAD_TURN_THRESHOLD) {
-    return 'left';
+  if (rawOffset < -HEAD_TURN_THRESHOLD) {
+    return 'right';
   }
 
   return 'center';

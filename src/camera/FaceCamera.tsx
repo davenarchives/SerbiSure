@@ -84,34 +84,6 @@ export const FaceCamera = forwardRef<FaceCameraHandle, FaceCameraProps>(function
           flash: 'off',
         });
 
-        try {
-          const fileUri = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
-          const data = await Skia.Data.fromURI(fileUri);
-          if (data) {
-            const image = Skia.Image.MakeImageFromEncoded(data);
-            if (image) {
-              const width = image.width();
-              const height = image.height();
-              const surface = Skia.Surface.Make(width, height);
-              if (surface) {
-                const canvas = surface.getCanvas();
-                canvas.translate(width / 2, height / 2);
-                canvas.rotate(180, 0, 0);
-                canvas.translate(-width / 2, -height / 2);
-                canvas.drawImage(image, 0, 0);
-
-                const snapshot = surface.makeImageSnapshot();
-                const base64 = snapshot.encodeToBase64();
-                if (base64) {
-                  return `data:image/jpeg;base64,${base64}`;
-                }
-              }
-            }
-          }
-        } catch (err) {
-          console.log('Error correcting selfie orientation:', err);
-        }
-
         return photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
       },
     }),

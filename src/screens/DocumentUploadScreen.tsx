@@ -6,6 +6,15 @@ import { IDPhotoModal } from './IDPhotoModal';
 
 const logoSource = require('../../assets/serbisure-logo.png');
 
+function getFileName(uri: string | null, defaultName: string) {
+  if (!uri) return defaultName;
+  const raw = uri.split('/').pop()?.split('?')[0];
+  if (raw && (raw.endsWith('.jpg') || raw.endsWith('.png') || raw.endsWith('.jpeg') || raw.endsWith('.pdf'))) {
+    return raw;
+  }
+  return defaultName;
+}
+
 type DocumentUploadScreenProps = {
   role?: 'homeowner' | 'kasambahay';
   onBack?: () => void;
@@ -72,9 +81,14 @@ export function DocumentUploadScreen({ role = 'kasambahay', onBack, onNext, onCa
         <View style={styles.cardContent}>
           <View>
             {role === 'homeowner' ? (
-              <Pressable style={styles.uploadBox} onPress={() => handleBoxPress('national')}>
+              <Pressable style={[styles.uploadBox, !!nationalImage && styles.uploadBoxHasImage]} onPress={() => handleBoxPress('national')}>
                 {nationalImage ? (
-                  <Image source={{ uri: nationalImage }} style={styles.uploadPreview} resizeMode="cover" />
+                  <View style={styles.attachmentContainer}>
+                    <Image source={{ uri: nationalImage }} style={[styles.uploadPreview, styles.uploadPreviewHomeowner]} resizeMode="cover" />
+                    <Text style={styles.fileNameTextItalic} numberOfLines={1}>
+                      {getFileName(nationalImage, 'national_id_card.jpg')}
+                    </Text>
+                  </View>
                 ) : (
                   <>
                     <Ionicons name="cloud-upload" size={28} color="#FFB43B" style={styles.uploadIcon} />
@@ -86,9 +100,14 @@ export function DocumentUploadScreen({ role = 'kasambahay', onBack, onNext, onCa
               </Pressable>
             ) : (
               <>
-                <Pressable style={[styles.uploadBox, styles.uploadBoxKasambahay]} onPress={() => handleBoxPress('nbi')}>
+                <Pressable style={[styles.uploadBox, styles.uploadBoxKasambahay, !!nbiImage && styles.uploadBoxHasImage]} onPress={() => handleBoxPress('nbi')}>
                   {nbiImage ? (
-                    <Image source={{ uri: nbiImage }} style={styles.uploadPreview} resizeMode="cover" />
+                    <View style={styles.attachmentContainer}>
+                      <Image source={{ uri: nbiImage }} style={styles.uploadPreview} resizeMode="cover" />
+                      <Text style={styles.fileNameTextItalic} numberOfLines={1}>
+                        {getFileName(nbiImage, 'nbi_clearance.jpg')}
+                      </Text>
+                    </View>
                   ) : (
                     <>
                       <Ionicons name="cloud-upload" size={26} color="#FFB43B" style={styles.uploadIcon} />
@@ -99,9 +118,14 @@ export function DocumentUploadScreen({ role = 'kasambahay', onBack, onNext, onCa
                   )}
                 </Pressable>
 
-                <Pressable style={[styles.uploadBox, styles.uploadBoxKasambahay]} onPress={() => handleBoxPress('police')}>
+                <Pressable style={[styles.uploadBox, styles.uploadBoxKasambahay, !!policeImage && styles.uploadBoxHasImage]} onPress={() => handleBoxPress('police')}>
                   {policeImage ? (
-                    <Image source={{ uri: policeImage }} style={styles.uploadPreview} resizeMode="cover" />
+                    <View style={styles.attachmentContainer}>
+                      <Image source={{ uri: policeImage }} style={styles.uploadPreview} resizeMode="cover" />
+                      <Text style={styles.fileNameTextItalic} numberOfLines={1}>
+                        {getFileName(policeImage, 'police_clearance.jpg')}
+                      </Text>
+                    </View>
                   ) : (
                     <>
                       <Ionicons name="cloud-upload" size={26} color="#FFB43B" style={styles.uploadIcon} />
@@ -241,27 +265,47 @@ const styles = StyleSheet.create({
   },
   uploadBox: {
     borderWidth: 1.5,
-    borderColor: '#555',
-    borderStyle: 'dashed',
+    borderColor: '#777',
+    borderStyle: 'dotted',
     borderRadius: 12,
-    paddingVertical: 40,
+    paddingVertical: 36,
     paddingHorizontal: 16,
     alignItems: 'center',
     marginTop: 16,
     marginBottom: 10,
+    backgroundColor: '#FAFAF8',
   },
   uploadBoxKasambahay: {
     paddingVertical: 14,
     marginTop: 8,
     marginBottom: 6,
   },
+  uploadBoxHasImage: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    backgroundColor: '#F5F4F0',
+  },
   uploadIcon: {
     marginBottom: 8,
   },
+  attachmentContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
   uploadPreview: {
     width: '100%',
-    height: 80,
+    height: 95,
     borderRadius: 8,
+  },
+  uploadPreviewHomeowner: {
+    height: 140,
+  },
+  fileNameTextItalic: {
+    fontStyle: 'italic',
+    fontSize: 11,
+    color: '#666666',
+    marginTop: 6,
+    textAlign: 'center',
   },
   uploadTitle: {
     fontSize: 13,
