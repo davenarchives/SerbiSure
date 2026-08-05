@@ -95,6 +95,7 @@ export function ChatsScreen() {
         contactName={activeChat.name}
         contactRole={activeChat.role}
         contactAvatar={activeChat.avatar}
+        userRole="kasambahay"
       />
     </View>
   );

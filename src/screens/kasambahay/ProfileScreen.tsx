@@ -25,7 +25,13 @@ export function ProfileScreen({
   const [currentView, setCurrentView] = useState<'main' | 'personal_info'>(initialView);
   const [isOnJob, setIsOnJob] = useState(false);
   const [isLanguageExpanded, setIsLanguageExpanded] = useState(false);
-  const [localAvatar, setLocalAvatar] = useState<string | null>(null);
+  const [localAvatar, setLocalAvatar] = useState<string | null>(avatarUri || null);
+
+  React.useEffect(() => {
+    if (avatarUri) {
+      setLocalAvatar(avatarUri);
+    }
+  }, [avatarUri]);
 
   React.useEffect(() => {
     if (initialView) {

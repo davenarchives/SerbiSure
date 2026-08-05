@@ -12,7 +12,13 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
   const { language, setLanguage, t } = useLanguage();
   const [currentView, setCurrentView] = useState<'main' | 'personal_info'>(initialView);
   const [isLanguageExpanded, setIsLanguageExpanded] = useState(false);
-  const [localAvatar, setLocalAvatar] = useState<string | null>(null);
+  const [localAvatar, setLocalAvatar] = useState<string | null>(avatarUri || null);
+
+  React.useEffect(() => {
+    if (avatarUri) {
+      setLocalAvatar(avatarUri);
+    }
+  }, [avatarUri]);
 
   React.useEffect(() => {
     if (initialView) {

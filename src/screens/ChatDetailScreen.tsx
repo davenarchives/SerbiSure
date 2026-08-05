@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { BookingModal } from './BookingModal';
 
 export interface ChatMessage {
   id: string;
@@ -29,6 +30,7 @@ export interface ChatMessage {
     title: string;
     startDate: string;
     details: string;
+    isConfirmed?: boolean;
   };
   isTyping?: boolean;
 }
@@ -41,6 +43,7 @@ interface ChatDetailScreenProps {
   contactAvatar?: string;
   isOnline?: boolean;
   initialMessage?: string;
+  userRole?: 'homeowner' | 'kasambahay';
 }
 
 const REACTION_OPTIONS = ['❤️', '👍', '😂', '😭', '😮'];
@@ -96,6 +99,7 @@ export function ChatDetailScreen({
   contactAvatar = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300',
   isOnline = true,
   initialMessage,
+  userRole = 'homeowner',
 }: ChatDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -104,6 +108,48 @@ export function ChatDetailScreen({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
   const [reactingMessageId, setReactingMessageId] = useState<string | null>(null);
+  const [bookingModalVisible, setBookingModalVisible] = useState(false);
+  const [bookingReadOnly, setBookingReadOnly] = useState(false);
+  const [activeBookingMsgId, setActiveBookingMsgId] = useState<string | null>(null);
+  const [activeBookingDetails, setActiveBookingDetails] = useState<any>(null);
+
+  const handleKasambahayConfirm = (msgId: string) => {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const timeString = `${hours % 12 || 12}:${minutes} ${hours >= 12 ? 'PM' : 'AM'}`;
+
+    setMessages((prev) => {
+      const updated = prev.map((msg) => {
+        if (msg.id === msgId && msg.bookingInfo) {
+          return {
+            ...msg,
+            bookingInfo: {
+              ...msg.bookingInfo,
+              title: 'BOOKING CONFIRMED',
+              isConfirmed: true,
+            },
+          };
+        }
+        return msg;
+      });
+
+      return [
+        ...updated,
+        {
+          id: Date.now().toString(),
+          sender: 'other',
+          text: `I have accepted and confirmed the booking request! Thank you po! 😊`,
+          time: timeString,
+          avatar: contactAvatar,
+        },
+      ];
+    });
+
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
 
   React.useEffect(() => {
     if (visible) {
@@ -263,8 +309,17 @@ export function ChatDetailScreen({
             </View>
           </View>
 
-          <Pressable style={styles.homeBtn} onPress={onClose} hitSlop={10}>
-            <Ionicons name="home-outline" size={22} color="#1A1A1A" />
+          <Pressable
+            style={styles.bookingHeaderBtn}
+            onPress={() => {
+              setBookingReadOnly(false);
+              setActiveBookingMsgId(null);
+              setActiveBookingDetails(null);
+              setBookingModalVisible(true);
+            }}
+            hitSlop={10}
+          >
+            <Ionicons name="calendar-outline" size={19} color="#1A1A1A" />
           </Pressable>
         </View>
 
@@ -292,21 +347,49 @@ export function ChatDetailScreen({
             {/* Messages */}
             {messages.map((item) => {
               if (item.sender === 'system' && item.bookingInfo) {
+                const isConfirmed = item.bookingInfo.isConfirmed || item.bookingInfo.title === 'BOOKING CONFIRMED';
+
                 return (
-                  <View key={item.id} style={styles.systemCardContainer}>
-                    <View style={styles.bookingCard}>
+                  <Pressable
+                    key={item.id}
+                    style={styles.systemCardContainer}
+                    onPress={() => {
+                      setActiveBookingMsgId(item.id);
+                      setActiveBookingDetails({
+                        startDate: item.bookingInfo?.startDate,
+                        workHours: item.bookingInfo?.details.split('·')[1]?.trim() || '08:00 AM - 05:00 PM',
+                        salary: item.bookingInfo?.details.split('·')[0]?.trim() || '5000',
+                        location: 'Lower Tambo Macasandig, Blk 5',
+                        days: ['M', 'T', 'W', 'Th', 'F'],
+                        scope: ['cooking', 'laundry', 'caregiver'],
+                      });
+                      setBookingReadOnly(true);
+                      setBookingModalVisible(true);
+                    }}
+                  >
+                    <View style={[styles.bookingCard, isConfirmed && styles.bookingCardConfirmed]}>
                       <View style={styles.bookingTagRow}>
-                        <Ionicons name="document-text-outline" size={16} color="#FFA51F" />
-                        <Text style={styles.bookingTagText}>{item.bookingInfo.title}</Text>
+                        <Ionicons
+                          name={isConfirmed ? "checkmark-circle" : "time-outline"}
+                          size={16}
+                          color={isConfirmed ? "#4CAF50" : "#FFA51F"}
+                        />
+                        <Text style={[styles.bookingTagText, isConfirmed && styles.bookingTagTextConfirmed]}>
+                          {isConfirmed ? 'BOOKING CONFIRMED' : 'BOOKING READY'}
+                        </Text>
                       </View>
                       <Text style={styles.bookingStartTitle}>Start: {item.bookingInfo.startDate}</Text>
                       <Text style={styles.bookingDetails}>{item.bookingInfo.details}</Text>
-                      <Pressable style={styles.viewBtn}>
-                        <Text style={styles.viewBtnText}>View ➔</Text>
-                      </Pressable>
+
+                      {isConfirmed && (
+                        <View style={styles.confirmedStatusTag}>
+                          <Ionicons name="checkmark-done-circle" size={16} color="#4CAF50" style={{ marginRight: 4 }} />
+                          <Text style={styles.confirmedStatusText}>Confirmed & Active</Text>
+                        </View>
+                      )}
                     </View>
                     <Text style={styles.systemTimeText}>{item.time}</Text>
-                  </View>
+                  </Pressable>
                 );
               }
 
@@ -435,6 +518,46 @@ export function ChatDetailScreen({
           ) : null}
         </View>
       </Modal>
+
+      {/* Booking Screen Modal */}
+      <BookingModal
+        visible={bookingModalVisible}
+        onClose={() => setBookingModalVisible(false)}
+        contactName={contactName}
+        contactRole={contactRole}
+        contactAvatar={contactAvatar}
+        readOnly={bookingReadOnly}
+        isConfirmed={activeBookingMsgId ? messages.find((m) => m.id === activeBookingMsgId)?.bookingInfo?.isConfirmed : false}
+        userRole={userRole}
+        initialDetails={activeBookingDetails}
+        onConfirm={(details) => {
+          const now = new Date();
+          const hours = now.getHours();
+          const minutes = now.getMinutes().toString().padStart(2, '0');
+          const ampm = hours >= 12 ? 'PM' : 'AM';
+          const timeString = `${hours % 12 || 12}:${minutes} ${ampm}`;
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: Date.now().toString(),
+              sender: 'system',
+              time: timeString,
+              bookingInfo: {
+                title: 'BOOKING READY',
+                startDate: details.startDate,
+                details: `${details.salary}/mo · ${details.workHours}`,
+                isConfirmed: false,
+              },
+            },
+          ]);
+          setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+        }}
+        onKasambahayConfirm={() => {
+          if (activeBookingMsgId) {
+            handleKasambahayConfirm(activeBookingMsgId);
+          }
+        }}
+      />
     </Modal>
   );
 }
@@ -496,8 +619,10 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 1,
   },
-  homeBtn: {
+  bookingHeaderBtn: {
     paddingLeft: 8,
+    alignSelf: 'flex-start',
+    marginTop: 2,
   },
   chatBody: {
     flex: 1,
@@ -611,6 +736,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
   },
+  bookingCardConfirmed: {
+    backgroundColor: '#F0F9F0',
+    borderColor: '#4CAF50',
+  },
   bookingTagRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -621,6 +750,9 @@ const styles = StyleSheet.create({
     color: '#FFA51F',
     letterSpacing: 0.5,
     marginLeft: 6,
+  },
+  bookingTagTextConfirmed: {
+    color: '#4CAF50',
   },
   bookingStartTitle: {
     fontSize: 14,
@@ -633,18 +765,55 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 2,
   },
-  viewBtn: {
+  tapToViewText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFB43B',
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  confirmBookingBtn: {
     backgroundColor: '#FFB43B',
     borderRadius: 20,
     paddingVertical: 8,
-    paddingHorizontal: 22,
+    paddingHorizontal: 20,
     alignSelf: 'center',
-    marginTop: 12,
+    marginTop: 10,
   },
-  viewBtnText: {
+  confirmBookingBtnText: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: 13,
+  },
+  pendingStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF5E5',
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 10,
+  },
+  pendingStatusText: {
+    color: '#D97706',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  confirmedStatusTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8F5E9',
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 10,
+  },
+  confirmedStatusText: {
+    color: '#2E7D32',
+    fontWeight: '800',
+    fontSize: 12,
   },
   systemTimeText: {
     fontSize: 10,

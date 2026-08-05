@@ -88,6 +88,10 @@ function getRingProgress(state: LivenessState) {
 }
 
 function getInstruction(state: LivenessState, showTrackerNotice: boolean, countdownValue: number | null) {
+  if (state.verified) {
+    return 'Verification Complete!';
+  }
+
   if (showTrackerNotice) {
     return 'Position your face\ninside the frame';
   }
@@ -150,7 +154,6 @@ export function LivenessScreen({ onVerified, onBack, onCancel, onSkip }: Livenes
 
       if (!current.verified && next.verified) {
         setShowCenterCheck(true);
-        setTimeout(() => setShowCenterCheck(false), 1000);
       }
 
       return next;
@@ -163,13 +166,19 @@ export function LivenessScreen({ onVerified, onBack, onCancel, onSkip }: Livenes
     }
 
     captureStartedRef.current = true;
+    setShowCenterCheck(true);
+
     void cameraRef.current?.captureSelfie().then((selfiePath) => {
-      setCapturedSelfiePath(selfiePath);
-      onVerified?.({
-        verified: true,
-        completedAt: Date.now(),
-        selfiePath: selfiePath ?? undefined,
-      });
+      if (selfiePath) {
+        setCapturedSelfiePath(selfiePath);
+      }
+      setTimeout(() => {
+        onVerified?.({
+          verified: true,
+          completedAt: Date.now(),
+          selfiePath: selfiePath ?? undefined,
+        });
+      }, 900);
     });
   }, [onVerified, started, state.verified]);
 
@@ -249,7 +258,15 @@ export function LivenessScreen({ onVerified, onBack, onCancel, onSkip }: Livenes
           <View>
             <View style={styles.verificationFrame}>
               {capturedSelfiePath ? (
-                <Image source={{ uri: `file://${capturedSelfiePath}` }} style={styles.capturedSelfie} resizeMode="cover" />
+                <Image
+                  source={{
+                    uri: capturedSelfiePath.startsWith('file://') || capturedSelfiePath.startsWith('data:')
+                      ? capturedSelfiePath
+                      : `file://${capturedSelfiePath}`,
+                  }}
+                  style={styles.capturedSelfie}
+                  resizeMode="cover"
+                />
               ) : started ? (
                 <View style={styles.cameraCircle}>
                   <FaceCamera ref={cameraRef} onLandmarks={handleLandmarks} />
