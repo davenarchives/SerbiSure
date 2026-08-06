@@ -51,7 +51,10 @@ export default function App() {
         {/* Step 1.5: Login Screen */}
         {flowState === 'login' && (
           <LoginScreen
-            onLoginSuccess={() => setFlowState('dashboard')}
+            onLoginSuccess={(token?: string) => {
+              if (token) setAccessToken(token);
+              setFlowState('dashboard');
+            }}
             onSignUp={() => setFlowState('user_selection')}
             onBack={() => setFlowState('landing')}
           />
