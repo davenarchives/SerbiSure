@@ -63,7 +63,7 @@ export function IDPhotoModal({ visible, onClose, onPickedImage }: IDPhotoModalPr
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.85,
-        allowsEditing: true,
+        allowsEditing: false,
       });
       if (!result.canceled && result.assets && result.assets[0]) {
         onPickedImage(result.assets[0].uri);
@@ -85,7 +85,7 @@ export function IDPhotoModal({ visible, onClose, onPickedImage }: IDPhotoModalPr
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.85,
-        allowsEditing: true,
+        allowsEditing: false,
       });
       if (!result.canceled && result.assets && result.assets[0]) {
         onPickedImage(result.assets[0].uri);
