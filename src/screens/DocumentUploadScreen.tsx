@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { IDPhotoModal } from './IDPhotoModal';
@@ -21,17 +21,20 @@ type DocumentUploadScreenProps = {
   onNext?: () => void;
   onCancel?: () => void;
   onSkip?: () => void;
+  token?: string | null;
 };
 
-export function DocumentUploadScreen({ role = 'kasambahay', onBack, onNext, onCancel, onSkip }: DocumentUploadScreenProps) {
+export function DocumentUploadScreen({ role = 'kasambahay', token, onBack, onNext, onCancel, onSkip }: DocumentUploadScreenProps) {
   const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
-  const [activeBox, setActiveBox] = useState<'nbi' | 'police' | 'national' | null>(null);
+  const [activeBox, setActiveBox] = useState<'nbi' | 'police' | 'national_front' | 'national_back' | null>(null);
   const [nbiImage, setNbiImage] = useState<string | null>(null);
   const [policeImage, setPoliceImage] = useState<string | null>(null);
-  const [nationalImage, setNationalImage] = useState<string | null>(null);
+  const [nationalFrontImage, setNationalFrontImage] = useState<string | null>(null);
+  const [nationalBackImage, setNationalBackImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleBoxPress = (box: 'nbi' | 'police' | 'national') => {
+  const handleBoxPress = (box: 'nbi' | 'police' | 'national_front' | 'national_back') => {
     setActiveBox(box);
     setModalVisible(true);
   };
@@ -39,7 +42,67 @@ export function DocumentUploadScreen({ role = 'kasambahay', onBack, onNext, onCa
   const handlePickedImage = (uri: string) => {
     if (activeBox === 'nbi') setNbiImage(uri);
     else if (activeBox === 'police') setPoliceImage(uri);
-    else if (activeBox === 'national') setNationalImage(uri);
+    else if (activeBox === 'national_front') setNationalFrontImage(uri);
+    else if (activeBox === 'national_back') setNationalBackImage(uri);
+  };
+
+  const handleUploadAll = async () => {
+    const uploads = [];
+    if (role === 'homeowner') {
+      if (!nationalFrontImage || !nationalBackImage) {
+        Alert.alert("Missing Documents", "Please upload both the front and back of your National ID.");
+        return;
+      }
+      uploads.push({ type: 'national_id_front', uri: nationalFrontImage });
+      uploads.push({ type: 'national_id_back', uri: nationalBackImage });
+    } else {
+      if (!nbiImage && !policeImage) {
+        Alert.alert("Missing Documents", "Please upload at least one clearance document.");
+        return;
+      }
+      if (nbiImage) uploads.push({ type: 'nbi_clearance', uri: nbiImage });
+      if (policeImage) uploads.push({ type: 'police_clearance', uri: policeImage });
+    }
+
+    setLoading(true);
+    try {
+      for (const upload of uploads) {
+        const formData = new FormData();
+        formData.append('document_type', upload.type);
+        
+        const filename = upload.uri.split('/').pop() || 'image.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image`;
+
+        formData.append('document_image', {
+          uri: upload.uri,
+          name: filename,
+          type
+        } as any);
+
+        const response = await fetch("http://192.168.1.9:8000/api/v1/verifications/upload/", {
+          method: "POST",
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            "Authorization": token ? `Bearer ${token}` : "",
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Failed to upload ${upload.type}`);
+        }
+      }
+
+      Alert.alert("Success", "Documents uploaded successfully!");
+      if (onNext) onNext();
+      
+    } catch (error: any) {
+      Alert.alert("Upload Failed", error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -81,23 +144,43 @@ export function DocumentUploadScreen({ role = 'kasambahay', onBack, onNext, onCa
         <View style={styles.cardContent}>
           <View>
             {role === 'homeowner' ? (
-              <Pressable style={[styles.uploadBox, !!nationalImage && styles.uploadBoxHasImage]} onPress={() => handleBoxPress('national')}>
-                {nationalImage ? (
-                  <View style={styles.attachmentContainer}>
-                    <Image source={{ uri: nationalImage }} style={[styles.uploadPreview, styles.uploadPreviewHomeowner]} resizeMode="cover" />
-                    <Text style={styles.fileNameTextItalic} numberOfLines={1}>
-                      {getFileName(nationalImage, 'national_id_card.jpg')}
-                    </Text>
-                  </View>
-                ) : (
-                  <>
-                    <Ionicons name="cloud-upload" size={28} color="#FFB43B" style={styles.uploadIcon} />
-                    <Text style={styles.uploadTitle}>National ID</Text>
-                    <Text style={styles.uploadSubtitle}>Tap or upload image</Text>
-                    <Text style={styles.uploadMeta}>JPG, PNG, PDF (Max 5MB)</Text>
-                  </>
-                )}
-              </Pressable>
+              <>
+                <Pressable style={[styles.uploadBox, styles.uploadBoxHomeowner, !!nationalFrontImage && styles.uploadBoxHasImage]} onPress={() => handleBoxPress('national_front')}>
+                  {nationalFrontImage ? (
+                    <View style={styles.attachmentContainer}>
+                      <Image source={{ uri: nationalFrontImage }} style={[styles.uploadPreview, styles.uploadPreviewHomeowner]} resizeMode="cover" />
+                      <Text style={styles.fileNameTextItalic} numberOfLines={1}>
+                        {getFileName(nationalFrontImage, 'national_id_front.jpg')}
+                      </Text>
+                    </View>
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload" size={26} color="#FFB43B" style={styles.uploadIcon} />
+                      <Text style={styles.uploadTitle}>National ID (Front)</Text>
+                      <Text style={styles.uploadSubtitle}>Tap or upload image</Text>
+                      <Text style={styles.uploadMeta}>JPG, PNG, PDF (Max 5MB)</Text>
+                    </>
+                  )}
+                </Pressable>
+
+                <Pressable style={[styles.uploadBox, styles.uploadBoxHomeowner, !!nationalBackImage && styles.uploadBoxHasImage]} onPress={() => handleBoxPress('national_back')}>
+                  {nationalBackImage ? (
+                    <View style={styles.attachmentContainer}>
+                      <Image source={{ uri: nationalBackImage }} style={[styles.uploadPreview, styles.uploadPreviewHomeowner]} resizeMode="cover" />
+                      <Text style={styles.fileNameTextItalic} numberOfLines={1}>
+                        {getFileName(nationalBackImage, 'national_id_back.jpg')}
+                      </Text>
+                    </View>
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload" size={26} color="#FFB43B" style={styles.uploadIcon} />
+                      <Text style={styles.uploadTitle}>National ID (Back)</Text>
+                      <Text style={styles.uploadSubtitle}>Tap or upload image</Text>
+                      <Text style={styles.uploadMeta}>JPG, PNG, PDF (Max 5MB)</Text>
+                    </>
+                  )}
+                </Pressable>
+              </>
             ) : (
               <>
                 <Pressable style={[styles.uploadBox, styles.uploadBoxKasambahay, !!nbiImage && styles.uploadBoxHasImage]} onPress={() => handleBoxPress('nbi')}>
@@ -141,8 +224,12 @@ export function DocumentUploadScreen({ role = 'kasambahay', onBack, onNext, onCa
 
           <View>
             <View style={styles.divider} />
-            <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={onNext}>
-              <Text style={styles.primaryButtonText}>Next</Text>
+            <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed, loading && { opacity: 0.7 }]} onPress={handleUploadAll} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Next</Text>
+              )}
             </Pressable>
             <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onCancel}>
               <Text style={styles.secondaryButtonText}>Cancel</Text>
@@ -280,6 +367,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 6,
   },
+  uploadBoxHomeowner: {
+    paddingVertical: 14,
+    marginTop: 8,
+    marginBottom: 6,
+  },
   uploadBoxHasImage: {
     paddingVertical: 10,
     paddingHorizontal: 10,
@@ -298,7 +390,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   uploadPreviewHomeowner: {
-    height: 140,
+    height: 100,
   },
   fileNameTextItalic: {
     fontStyle: 'italic',
