@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -8,7 +8,7 @@ const logoSource = require('../../assets/serbisure-logo.png');
 type RegistrationScreenProps = {
   role: 'homeowner' | 'kasambahay';
   onBack?: () => void;
-  onNext?: () => void;
+  onNext?: (token?: string) => void;
   onCancel?: () => void;
 };
 
@@ -17,11 +17,76 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('+63');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
   const isHomeowner = role === 'homeowner';
 
+  const handleRegister = async () => {
+    if (!termsAccepted || !privacyAccepted) {
+      Alert.alert("Required", "Please accept the terms and privacy policy.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert("Error", "Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        first_name: firstName,
+        middle_name: middleName,
+        last_name: lastName,
+        email: email,
+        password: password,
+        account_type: isHomeowner ? "Homeowner" : "Kasambahay",
+        contact_number: phoneNumber,
+      };
+
+      const generateUUID = () => {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+      };
+
+      const idempotencyKey = generateUUID();
+
+      // Using your local IP address since 127.0.0.1 wouldn't work on the physical phone
+      const response = await fetch("http://192.168.1.9:8000/api/v1/accounts/register/", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey 
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        Alert.alert("Success", "Registration successful!");
+        if (onNext) onNext(data.access);
+      } else {
+        // Show validation errors from Django (like password rules, duplicate email, etc.)
+        Alert.alert("Registration Failed", JSON.stringify(data));
+      }
+    } catch (error: any) {
+      Alert.alert("Network Error", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1 }} 
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={[styles.root, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 14) }]}>
@@ -38,7 +103,7 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
         <View style={styles.titleBlock}>
           <Text style={styles.title}>{isHomeowner ? 'Join as Homeowner' : 'Join as Kasambahay'}</Text>
           <Text style={styles.subtitle}>
-            {isHomeowner 
+            {isHomeowner
               ? 'Join as a homeowner to find trusted professionals for your household.'
               : 'Start your journey as a trusted professional. Fill in your details below to create your Kasambahay profile.'}
           </Text>
@@ -46,7 +111,7 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
 
         <View style={styles.card}>
           <View style={styles.formContent}>
-            <View style={{ paddingTop: 4 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 4, paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
               <View style={styles.stepIndicator}>
                 <View style={[styles.stepDot, styles.stepDotActive]} />
                 <View style={styles.stepDot} />
@@ -54,37 +119,35 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Full Name</Text>
+                <Text style={styles.label}>First Name</Text>
                 <View style={styles.inputContainer}>
                   <Ionicons name="person" size={16} color="#000" style={styles.inputIcon} />
-                  <TextInput style={styles.input} placeholder="" placeholderTextColor="#999" />
+                  <TextInput style={styles.input} placeholder="Juan" placeholderTextColor="#999" value={firstName} onChangeText={setFirstName} />
                 </View>
               </View>
 
-              {!isHomeowner && (
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Primary Specialization</Text>
-                  <View style={styles.specializationRow}>
-                    <View style={[styles.specTag, styles.specTagActive]}>
-                      <Text style={styles.specTagEmoji}>🤝</Text>
-                      <Text style={[styles.specTagText, styles.specTagTextActive]}>Nanny</Text>
-                    </View>
-                    <View style={styles.specTag}>
-                      <Text style={styles.specTagEmoji}>🧹</Text>
-                      <Text style={styles.specTagText}>Cleaner</Text>
-                    </View>
-                    <View style={styles.addSpecBtn}>
-                      <Ionicons name="add" size={16} color="#000" />
-                    </View>
-                  </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Middle Name (Optional)</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="person" size={16} color="#000" style={styles.inputIcon} />
+                  <TextInput style={styles.input} placeholder="Santos" placeholderTextColor="#999" value={middleName} onChangeText={setMiddleName} />
                 </View>
-              )}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Last Name</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="person" size={16} color="#000" style={styles.inputIcon} />
+                  <TextInput style={styles.input} placeholder="Dela Cruz" placeholderTextColor="#999" value={lastName} onChangeText={setLastName} />
+                </View>
+              </View>
+
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Phone Number</Text>
                 <View style={styles.inputContainer}>
                   <Ionicons name="call" size={16} color="#000" style={styles.inputIcon} />
-                  <TextInput style={styles.input} keyboardType="phone-pad" />
+                  <TextInput style={styles.input} keyboardType="phone-pad" value={phoneNumber} onChangeText={setPhoneNumber} />
                 </View>
               </View>
 
@@ -92,7 +155,7 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
                 <Text style={styles.label}>Email</Text>
                 <View style={styles.inputContainer}>
                   <Ionicons name="mail" size={16} color="#000" style={styles.inputIcon} />
-                  <TextInput style={styles.input} keyboardType="email-address" autoCapitalize="none" />
+                  <TextInput style={styles.input} keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
                 </View>
               </View>
 
@@ -100,26 +163,24 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
                 <Text style={styles.label}>Password</Text>
                 <View style={styles.inputContainer}>
                   <Ionicons name="lock-closed" size={16} color="#000" style={styles.inputIcon} />
-                  <TextInput style={styles.input} secureTextEntry />
+                  <TextInput style={styles.input} secureTextEntry value={password} onChangeText={setPassword} />
                 </View>
               </View>
 
-              {isHomeowner && (
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Confirm Password</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="lock-closed" size={16} color="#000" style={styles.inputIcon} />
-                    <TextInput style={styles.input} secureTextEntry />
-                  </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Confirm Password</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="lock-closed" size={16} color="#000" style={styles.inputIcon} />
+                  <TextInput style={styles.input} secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
                 </View>
-              )}
+              </View>
 
               <View style={styles.checkboxGroup}>
                 <Pressable style={styles.checkboxRow} onPress={() => setTermsAccepted(!termsAccepted)}>
-                  <Ionicons 
-                    name={termsAccepted ? "checkbox-outline" : "square-outline"} 
-                    size={16} 
-                    color="#000" 
+                  <Ionicons
+                    name={termsAccepted ? "checkbox-outline" : "square-outline"}
+                    size={16}
+                    color="#000"
                   />
                   <Text style={styles.checkboxText}>
                     I consent to <Text style={styles.linkText}>Terms and Conditions</Text>.
@@ -127,22 +188,22 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
                 </Pressable>
 
                 <Pressable style={styles.checkboxRow} onPress={() => setPrivacyAccepted(!privacyAccepted)}>
-                  <Ionicons 
-                    name={privacyAccepted ? "checkbox-outline" : "square-outline"} 
-                    size={16} 
-                    color="#000" 
+                  <Ionicons
+                    name={privacyAccepted ? "checkbox-outline" : "square-outline"}
+                    size={16}
+                    color="#000"
                   />
                   <Text style={styles.checkboxText}>
                     I consent to <Text style={styles.linkText}>Data Privacy Policy</Text>.
                   </Text>
                 </Pressable>
               </View>
-            </View>
+            </ScrollView>
 
             <View>
               <View style={styles.divider} />
-              <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={onNext}>
-                <Text style={styles.primaryButtonText}>Next</Text>
+              <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={handleRegister} disabled={loading}>
+                {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>Next</Text>}
               </Pressable>
               <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onCancel}>
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
