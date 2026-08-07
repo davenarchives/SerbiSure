@@ -28,6 +28,7 @@ export default function App() {
   const [flowState, setFlowState] = useState<AppFlowState>('landing');
   const [selectedRole, setSelectedRole] = useState<Role>('homeowner');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   const handleSelectRole = (role: Role) => {
     setSelectedRole(role);
@@ -50,7 +51,10 @@ export default function App() {
         {/* Step 1.5: Login Screen */}
         {flowState === 'login' && (
           <LoginScreen
-            onLoginSuccess={() => setFlowState('dashboard')}
+            onLoginSuccess={(token?: string) => {
+              if (token) setAccessToken(token);
+              setFlowState('dashboard');
+            }}
             onSignUp={() => setFlowState('user_selection')}
             onBack={() => setFlowState('landing')}
           />
@@ -69,7 +73,10 @@ export default function App() {
           <RegistrationStep1
             role={selectedRole}
             onBack={() => setFlowState('user_selection')}
-            onNext={() => setFlowState('registration2')}
+            onNext={(token?: string) => {
+              if (token) setAccessToken(token);
+              setFlowState('registration2');
+            }}
             onCancel={() => setFlowState('landing')}
           />
         )}
@@ -78,6 +85,7 @@ export default function App() {
         {flowState === 'registration2' && (
           <RegistrationStep2
             role={selectedRole}
+            token={accessToken}
             onBack={() => setFlowState('registration1')}
             onNext={() => setFlowState('registration3')}
             onCancel={() => setFlowState('landing')}
@@ -88,6 +96,7 @@ export default function App() {
         {/* Step 5: Registration 3 - Take a Selfie / Liveness Verification */}
         {flowState === 'registration3' && (
           <RegistrationStep3
+            token={accessToken}
             onVerified={(result) => {
               if (result.selfiePath) {
                 const uri = result.selfiePath.startsWith('data:') || result.selfiePath.startsWith('file:')

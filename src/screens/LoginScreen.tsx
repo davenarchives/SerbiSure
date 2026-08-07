@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 const logoSource = require('../../assets/serbisure-logo.png');
 
 type LoginScreenProps = {
-  onLoginSuccess?: () => void;
+  onLoginSuccess?: (token?: string) => void;
   onSignUp?: () => void;
   onBack?: () => void;
 };
@@ -26,6 +27,41 @@ export function LoginScreen({ onLoginSuccess, onSignUp, onBack }: LoginScreenPro
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleLogin = async () => {
+    setErrorMsg('');
+    if (!email || !password) {
+      setErrorMsg('Please enter your email and password');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://192.168.1.9:8000/api/v1/accounts/login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Wrong email or password. Please try again!');
+      }
+
+      if (onLoginSuccess) {
+        onLoginSuccess(data.access);
+      }
+    } catch (error: any) {
+      setErrorMsg(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -56,6 +92,12 @@ export function LoginScreen({ onLoginSuccess, onSignUp, onBack }: LoginScreenPro
 
         {/* Login Form White Card */}
         <View style={styles.formCard}>
+          {errorMsg ? (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={20} color="#E53935" />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          ) : null}
           {/* Email Field */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email</Text>
@@ -103,11 +145,21 @@ export function LoginScreen({ onLoginSuccess, onSignUp, onBack }: LoginScreenPro
 
           {/* Login Button */}
           <Pressable
-            style={({ pressed }) => [styles.loginBtn, pressed && styles.btnPressed]}
-            onPress={onLoginSuccess}
+            style={({ pressed }) => [
+              styles.loginBtn, 
+              (pressed || isLoading) && styles.btnPressed
+            ]}
+            onPress={handleLogin}
+            disabled={isLoading}
           >
-            <Text style={styles.loginBtnText}>Log in</Text>
-            <Ionicons name="arrow-forward" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Text style={styles.loginBtnText}>Log in</Text>
+                <Ionicons name="arrow-forward" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
+              </>
+            )}
           </Pressable>
 
           {/* Hairline Divider */}
@@ -247,8 +299,23 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   signupLink: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFB43B',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: '#0AA018',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#E53935',
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
   },
 });

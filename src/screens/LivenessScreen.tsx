@@ -19,6 +19,7 @@ const logoSource = require('../../assets/serbisure-logo.png');
 const faceSource = require('../../assets/face-placeholder.png');
 
 type LivenessScreenProps = {
+  token?: string | null;
   onVerified?: (result: LivenessResult) => void;
   onBack?: () => void;
   onCancel?: () => void;
@@ -115,7 +116,7 @@ function getInstruction(state: LivenessState, showTrackerNotice: boolean, countd
   return 'Face forward and stay still';
 }
 
-export function LivenessScreen({ onVerified, onBack, onCancel, onSkip }: LivenessScreenProps) {
+export function LivenessScreen({ token, onVerified, onBack, onCancel, onSkip }: LivenessScreenProps) {
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<FaceCameraHandle | null>(null);
   const captureStartedRef = useRef(false);
@@ -168,9 +169,34 @@ export function LivenessScreen({ onVerified, onBack, onCancel, onSkip }: Livenes
     captureStartedRef.current = true;
     setShowCenterCheck(true);
 
-    void cameraRef.current?.captureSelfie().then((selfiePath) => {
+    void cameraRef.current?.captureSelfie().then(async (selfiePath) => {
       if (selfiePath) {
         setCapturedSelfiePath(selfiePath);
+        
+        try {
+          const uri = selfiePath.startsWith('file:') ? selfiePath : `file://${selfiePath}`;
+          const filename = uri.split('/').pop() || 'profile.jpg';
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+          const formData = new FormData();
+          formData.append('profile_image', {
+            uri,
+            name: filename,
+            type
+          } as any);
+
+          await fetch("http://192.168.1.9:8000/api/v1/accounts/profile-image/", {
+            method: "PUT",
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              "Authorization": token ? `Bearer ${token}` : "",
+            },
+            body: formData,
+          });
+        } catch (e) {
+          console.error("Failed to upload profile image", e);
+        }
       }
       setTimeout(() => {
         onVerified?.({
@@ -178,9 +204,9 @@ export function LivenessScreen({ onVerified, onBack, onCancel, onSkip }: Livenes
           completedAt: Date.now(),
           selfiePath: selfiePath ?? undefined,
         });
-      }, 900);
+      }, 500); // reduced timeout slightly to compensate for upload time
     });
-  }, [onVerified, started, state.verified]);
+  }, [onVerified, started, state.verified, token]);
 
   const countdownValue = useMemo(() => {
     if (state.step !== 'still' || state.verified) {
