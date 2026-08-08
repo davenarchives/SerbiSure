@@ -12,26 +12,39 @@ import {
   Animated,
   Easing,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { API_BASE_URL, fetchWithTimeout } from '../../config/api';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
+
+function generateUUIDv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 interface PostJobScreenProps {
   visible: boolean;
   onClose: () => void;
+  role?: 'Homeowner' | 'Kasambahay';
+  token?: string | null;
 }
 
-export function PostJobScreen({ visible, onClose }: PostJobScreenProps) {
+export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: PostJobScreenProps) {
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   // Form State
-  const [selectedService, setSelectedService] = useState('Cleaning');
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [engagementType, setEngagementType] = useState<'short' | 'long'>('short');
-  const [viewDate, setViewDate] = useState<Date>(new Date(2026, 4, 1)); // May 2026 default
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date(2026, 4, 26)); // May 26, 2026 default
+  const defaultDate = new Date();
+  defaultDate.setDate(defaultDate.getDate() + 1); // Default to tomorrow
+  const [viewDate, setViewDate] = useState<Date>(new Date(defaultDate.getFullYear(), defaultDate.getMonth(), 1));
+  const [selectedDate, setSelectedDate] = useState<Date>(defaultDate);
   const [selectedTime, setSelectedTime] = useState<'morning' | 'afternoon' | 'night'>('afternoon');
   const [address, setAddress] = useState('');
   const [floorUnit, setFloorUnit] = useState('');
@@ -142,26 +155,80 @@ export function PostJobScreen({ visible, onClose }: PostJobScreenProps) {
 
   const services = [
     { id: 'Cleaning', label: 'Cleaning', icon: 'brush-outline' },
-    { id: 'Child Care', label: 'Child Care', icon: 'happy-outline' },
-    { id: 'Cook', label: 'Cook', icon: 'restaurant-outline' },
+    { id: 'Child_care', label: 'Child Care', icon: 'happy-outline' },
+    { id: 'Cooking', label: 'Cook', icon: 'restaurant-outline' },
     { id: 'Caregiver', label: 'Caregiver', icon: 'heart-outline' },
     { id: 'Laundry', label: 'Laundry', icon: 'shirt-outline' },
     { id: 'All-around', label: 'All-around', icon: 'home-outline' },
   ];
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step < 4) {
+      if (step === 1 && selectedServices.length === 0) {
+        Alert.alert('Error', 'Please select at least one service.');
+        return;
+      }
       setStep((prev) => (prev + 1) as 1 | 2 | 3 | 4);
     } else {
-      // Step 4 Submit
+      if (!agreedTerms) {
+        Alert.alert('Error', 'Please agree to the Terms of Service.');
+        return;
+      }
+      
       setIsPosting(true);
-      setPostedSuccess(true);
-      setTimeout(() => {
-        setPostedSuccess(false);
+      
+      try {
+        const startTime = new Date(selectedDate);
+        startTime.setHours(selectedTime === 'morning' ? 8 : selectedTime === 'afternoon' ? 12 : 17, 0, 0, 0);
+
+        const endTime = new Date(selectedDate);
+        endTime.setHours(selectedTime === 'morning' ? 12 : selectedTime === 'afternoon' ? 17 : 21, 0, 0, 0);
+
+        const payload = {
+          booking_type: engagementType === 'short' ? 'short_term' : 'long_term',
+          service_category: selectedServices,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          service_address: address,
+          floor_number: floorUnit || undefined,
+          zip_code: zipCode,
+          special_instruction: instructions || undefined,
+          daily_rate: offerAmount
+        };
+
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/v1/booking/post/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : '',
+            'Idempotency-Key': generateUUIDv4()
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error(errorData);
+          Alert.alert('Booking Error', JSON.stringify(errorData));
+          setIsPosting(false);
+          return;
+        }
+
+        setPostedSuccess(true);
+        setTimeout(() => {
+          setPostedSuccess(false);
+          setIsPosting(false);
+          setStep(1);
+          setSelectedServices([]);
+          setZipCode('');
+          setAddress('');
+          onClose();
+        }, 2000);
+      } catch (error) {
+        console.error(error);
+        Alert.alert('Network Error', 'Failed to connect to the server.');
         setIsPosting(false);
-        setStep(1);
-        onClose();
-      }, 2000);
+      }
     }
   };
 
@@ -213,12 +280,12 @@ export function PostJobScreen({ visible, onClose }: PostJobScreenProps) {
             <View style={styles.titleBlock}>
               {step === 1 && (
                 <Text style={styles.mainTitle}>
-                  What <Text style={styles.titleHighlight}>service</Text> do you need today?
+                  What <Text style={styles.titleHighlight}>service</Text> do you {role === 'Homeowner' ? 'need' : 'offer'} today?
                 </Text>
               )}
               {step === 2 && (
                 <Text style={styles.mainTitle}>
-                  When do you <Text style={styles.titleHighlight}>need</Text> the service?
+                  When do you <Text style={styles.titleHighlight}>{role === 'Homeowner' ? 'need' : 'offer'}</Text> the service?
                 </Text>
               )}
               {step === 3 && <Text style={styles.mainTitle}>Job Details</Text>}
@@ -236,12 +303,31 @@ export function PostJobScreen({ visible, onClose }: PostJobScreenProps) {
             {step === 1 && (
               <View style={styles.serviceGrid}>
                 {services.map((item) => {
-                  const isSelected = selectedService === item.id;
+                  const isSelected = selectedServices.includes(item.id);
+                  
+                  const handleToggle = () => {
+                    setSelectedServices(prev => {
+                      if (item.id === 'All-around') return ['All-around'];
+                      
+                      let updated = prev.includes(item.id) 
+                        ? prev.filter(s => s !== item.id) 
+                        : [...prev, item.id];
+                        
+                      updated = updated.filter(s => s !== 'All-around');
+                      
+                      const coreServices = ['Cleaning', 'Child_care', 'Cooking', 'Caregiver', 'Laundry'];
+                      const hasAllCore = coreServices.every(s => updated.includes(s));
+                      
+                      if (hasAllCore) return ['All-around'];
+                      return updated;
+                    });
+                  };
+
                   return (
                     <Pressable
                       key={item.id}
                       style={[styles.serviceCard, isSelected && styles.serviceCardActive]}
-                      onPress={() => setSelectedService(item.id)}
+                      onPress={handleToggle}
                     >
                       <View style={[styles.iconCircle, isSelected && styles.iconCircleActive]}>
                         <Ionicons name={item.icon as any} size={26} color="#FFB43B" />
@@ -457,7 +543,11 @@ export function PostJobScreen({ visible, onClose }: PostJobScreenProps) {
                 <View style={styles.summaryCard}>
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Service</Text>
-                    <Text style={styles.summaryValue}>{selectedService}</Text>
+                    <Text style={[styles.summaryValue, { flex: 1, textAlign: 'right', marginLeft: 16 }]}>
+                      {selectedServices.length > 0 
+                        ? selectedServices.map(s => services.find(x => x.id === s)?.label || s).join(', ')
+                        : 'None'}
+                    </Text>
                   </View>
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Type</Text>
@@ -482,7 +572,7 @@ export function PostJobScreen({ visible, onClose }: PostJobScreenProps) {
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Location</Text>
                     <Text style={[styles.summaryValue, { textAlign: 'right', flex: 1, marginLeft: 20 }]}>
-                      Lower Tambo Macasandig, Blk 5
+                      {address || 'Not specified'}
                     </Text>
                   </View>
                 </View>

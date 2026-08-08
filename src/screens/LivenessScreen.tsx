@@ -194,7 +194,7 @@ export function LivenessScreen({ token, onVerified, onBack, onCancel, onSkip }: 
               "Authorization": token ? `Bearer ${token}` : "",
             },
             body: formData,
-          });
+          }, 60000); // 60 seconds — image uploads to Cloudinary take longer than the default 15s
         } catch (e) {
           console.error("Failed to upload profile image", e);
         }

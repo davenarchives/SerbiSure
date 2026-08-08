@@ -23,11 +23,12 @@ export type Tab = 'home' | 'services' | 'chats' | 'profile';
 interface BottomTabNavigatorProps {
   role?: Role;
   avatarUri?: string | null;
+  token?: string | null;
   onUpdateAvatar?: (uri: string) => void;
   onLogout?: () => void;
 }
 
-export function BottomTabNavigator({ role = 'homeowner', avatarUri, onUpdateAvatar, onLogout }: BottomTabNavigatorProps) {
+export function BottomTabNavigator({ role = 'homeowner', avatarUri, token, onUpdateAvatar, onLogout }: BottomTabNavigatorProps) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<Tab>('home');
@@ -147,9 +148,9 @@ export function BottomTabNavigator({ role = 'homeowner', avatarUri, onUpdateAvat
       </View>
 
       {isKasambahay ? (
-        <PostServiceScreen visible={postJobVisible} onClose={() => setPostJobVisible(false)} />
+        <PostServiceScreen visible={postJobVisible} onClose={() => setPostJobVisible(false)} token={token} />
       ) : (
-        <PostJobScreen visible={postJobVisible} onClose={() => setPostJobVisible(false)} />
+        <PostJobScreen visible={postJobVisible} onClose={() => setPostJobVisible(false)} token={token} />
       )}
     </View>
   );
