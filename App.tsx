@@ -113,6 +113,7 @@ export default function App() {
           <BottomTabNavigator
             role={selectedRole}
             avatarUri={avatarUri}
+            token={accessToken}
             onUpdateAvatar={(uri: string) => setAvatarUri(uri)}
             onLogout={() => setFlowState('login')}
           />

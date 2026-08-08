@@ -22,9 +22,10 @@ const logoSource = require('../../../assets/serbisure-logo.png');
 interface PostServiceScreenProps {
   visible: boolean;
   onClose: () => void;
+  token?: string | null;
 }
 
-export function PostServiceScreen({ visible, onClose }: PostServiceScreenProps) {
+export function PostServiceScreen({ visible, onClose, token }: PostServiceScreenProps) {
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
