@@ -12,12 +12,8 @@ function getApiBaseUrl(): string {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
-
-  // On Android devices connected via USB (with ADB reverse active) or emulator, 127.0.0.1 routes straight to PC
-  if (Platform.OS === 'android') {
-    return 'http://127.0.0.1:8000';
-  }
-
+  // Step 1: Try to dynamically grab the real WiFi IP from Expo's Metro bundler.
+  // This works on physical phones connected over WiFi — it extracts the PC's IP automatically.
   const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
   if (hostUri) {
     const ip = hostUri.split(':')[0];
@@ -26,6 +22,13 @@ function getApiBaseUrl(): string {
     }
   }
 
+  // Step 2: If no real IP was found, we're likely on an Android emulator or USB with ADB reverse.
+  // In that case, 127.0.0.1 routes straight to the PC's localhost.
+  if (Platform.OS === 'android') {
+    return 'http://127.0.0.1:8000';
+  }
+
+  // Step 3: Final fallback (e.g. iOS simulator or edge cases)
   return 'http://192.168.1.6:8000';
 }
 
