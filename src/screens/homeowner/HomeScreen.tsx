@@ -3,12 +3,14 @@ import { StyleSheet, Text, View, Image, ScrollView, TextInput, Pressable } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLanguage } from '../../context/LanguageContext';
+import { useUser } from '../../context/UserContext';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
 
 export function HomeScreen({ avatarUri, onAvatarPress, onViewProfile }: { avatarUri?: string | null, onAvatarPress?: () => void, onViewProfile?: () => void }) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
+  const { getFirstNameOnly } = useUser();
   
   const today = new Date();
   const dateString = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase();
@@ -40,7 +42,7 @@ export function HomeScreen({ avatarUri, onAvatarPress, onViewProfile }: { avatar
           </Pressable>
           <View style={styles.greetingTextContainer}>
             <Text style={styles.dateText}>{dateString}</Text>
-            <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>{t.greeting}, Homeowner!</Text>
+            <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>{t.greeting}, {getFirstNameOnly()}!</Text>
           </View>
           <Ionicons name="options-outline" size={28} color="#333" />
         </View>

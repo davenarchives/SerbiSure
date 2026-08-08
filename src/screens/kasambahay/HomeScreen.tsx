@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, Image, ScrollView, Pressable, Modal } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../context/LanguageContext';
+import { useUser } from '../../context/UserContext';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
 
@@ -61,6 +62,7 @@ const MOCK_JOBS: JobOffer[] = [
 export function HomeScreen({ avatarUri, onAvatarPress, onViewProfile }: { avatarUri?: string | null; onAvatarPress?: () => void; onViewProfile?: () => void }) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
+  const { getFirstNameOnly } = useUser();
   const [selectedJob, setSelectedJob] = useState<JobOffer | null>(null);
   const [appliedJobs, setAppliedJobs] = useState<number[]>([]);
 
@@ -101,7 +103,7 @@ export function HomeScreen({ avatarUri, onAvatarPress, onViewProfile }: { avatar
           </Pressable>
           <View style={styles.greetingTextContainer}>
             <Text style={styles.dateText}>{dateString}</Text>
-            <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>{t.greeting}, Kasambahay!</Text>
+            <Text style={styles.greetingText} numberOfLines={1} adjustsFontSizeToFit>{t.greeting}, {getFirstNameOnly()}!</Text>
           </View>
           <Ionicons name="options-outline" size={28} color="#333" />
         </View>

@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View, Alert, ActivityIndicator } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { IDPhotoModal } from './IDPhotoModal';
+import { API_BASE_URL, fetchWithTimeout } from '../config/api';
 
 const logoSource = require('../../assets/serbisure-logo.png');
 
@@ -80,7 +81,7 @@ export function DocumentUploadScreen({ role = 'kasambahay', token, onBack, onNex
           type
         } as any);
 
-        const response = await fetch("http://192.168.1.9:8000/api/v1/verifications/upload/", {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/v1/verifications/upload/`, {
           method: "POST",
           headers: {
             'Content-Type': 'multipart/form-data',
@@ -137,8 +138,8 @@ export function DocumentUploadScreen({ role = 'kasambahay', token, onBack, onNex
       <View style={styles.card}>
         <View style={styles.stepIndicator}>
           <View style={styles.stepDot} />
-          <View style={[styles.stepDot, styles.stepDotActive]} />
           <View style={styles.stepDot} />
+          <View style={[styles.stepDot, styles.stepDotActive]} />
         </View>
 
         <View style={styles.cardContent}>

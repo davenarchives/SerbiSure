@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { API_BASE_URL, fetchWithTimeout } from '../config/api';
 
 import { FaceCamera, type FaceCameraHandle } from '../camera/FaceCamera';
 import type { LandmarkFrame } from '../face/types';
@@ -186,7 +187,7 @@ export function LivenessScreen({ token, onVerified, onBack, onCancel, onSkip }: 
             type
           } as any);
 
-          await fetch("http://192.168.1.9:8000/api/v1/accounts/profile-image/", {
+          await fetchWithTimeout(`${API_BASE_URL}/api/v1/accounts/profile-image/`, {
             method: "PUT",
             headers: {
               'Content-Type': 'multipart/form-data',
@@ -261,11 +262,7 @@ export function LivenessScreen({ token, onVerified, onBack, onCancel, onSkip }: 
           </Pressable>
         </View>
         <Image source={logoSource} style={styles.logo} resizeMode="contain" />
-        <View style={[styles.headerSide, styles.headerSideRight]}>
-          <Pressable onPress={onSkip}>
-            <Text style={styles.skipText}>Skip</Text>
-          </Pressable>
-        </View>
+        <View style={[styles.headerSide, styles.headerSideRight]} />
       </View>
 
       <View style={styles.titleBlock}>
@@ -276,8 +273,8 @@ export function LivenessScreen({ token, onVerified, onBack, onCancel, onSkip }: 
       <View style={styles.card}>
         <View style={styles.stepIndicator}>
           <View style={styles.stepDot} />
-          <View style={styles.stepDot} />
           <View style={[styles.stepDot, styles.stepDotActive]} />
+          <View style={styles.stepDot} />
         </View>
 
         <View style={styles.cardContent}>

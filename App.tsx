@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LanguageProvider } from './src/context/LanguageContext';
+import { UserProvider } from './src/context/UserContext';
 
 import {
   LandingScreen,
@@ -37,26 +38,22 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <LanguageProvider>
+      <UserProvider>
+        <LanguageProvider>
         <StatusBar style={flowState === 'registration3' ? 'light' : 'dark'} />
 
-        {/* Step 1: Landing Page */}
-        {flowState === 'landing' && (
+        {/* Step 1 & 1.5: Landing Page & Animated Login Flow */}
+        {(flowState === 'landing' || flowState === 'login') && (
           <LandingScreen
+            isLoginView={flowState === 'login'}
             onGetStarted={() => setFlowState('user_selection')}
-            onLogin={() => setFlowState('login')}
-          />
-        )}
-
-        {/* Step 1.5: Login Screen */}
-        {flowState === 'login' && (
-          <LoginScreen
+            onLoginPress={() => setFlowState('login')}
+            onBackToLanding={() => setFlowState('landing')}
             onLoginSuccess={(token?: string) => {
               if (token) setAccessToken(token);
               setFlowState('dashboard');
             }}
             onSignUp={() => setFlowState('user_selection')}
-            onBack={() => setFlowState('landing')}
           />
         )}
 
@@ -81,20 +78,8 @@ export default function App() {
           />
         )}
 
-        {/* Step 4: Registration 2 - Verify Identity / Document Upload */}
+        {/* Step 4: Registration 2 - Take a Selfie / Mandatory Liveness Verification */}
         {flowState === 'registration2' && (
-          <RegistrationStep2
-            role={selectedRole}
-            token={accessToken}
-            onBack={() => setFlowState('registration1')}
-            onNext={() => setFlowState('registration3')}
-            onCancel={() => setFlowState('landing')}
-            onSkip={() => setFlowState('dashboard')}
-          />
-        )}
-
-        {/* Step 5: Registration 3 - Take a Selfie / Liveness Verification */}
-        {flowState === 'registration3' && (
           <RegistrationStep3
             token={accessToken}
             onVerified={(result) => {
@@ -104,9 +89,20 @@ export default function App() {
                   : `file://${result.selfiePath}`;
                 setAvatarUri(uri);
               }
-              setFlowState('dashboard');
+              setFlowState('registration3');
             }}
+            onBack={() => setFlowState('registration1')}
+            onCancel={() => setFlowState('landing')}
+          />
+        )}
+
+        {/* Step 5: Registration 3 - Verify Identity / Document Upload (Optional & Skippable) */}
+        {flowState === 'registration3' && (
+          <RegistrationStep2
+            role={selectedRole}
+            token={accessToken}
             onBack={() => setFlowState('registration2')}
+            onNext={() => setFlowState('dashboard')}
             onCancel={() => setFlowState('landing')}
             onSkip={() => setFlowState('dashboard')}
           />
@@ -122,6 +118,7 @@ export default function App() {
           />
         )}
       </LanguageProvider>
-    </SafeAreaProvider>
+    </UserProvider>
+  </SafeAreaProvider>
   );
 }
