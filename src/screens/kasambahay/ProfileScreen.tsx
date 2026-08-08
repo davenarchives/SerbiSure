@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useLanguage, type Language } from '../../context/LanguageContext';
+import { useUser } from '../../context/UserContext';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
 
@@ -22,6 +23,7 @@ export function ProfileScreen({
 }) {
   const insets = useSafeAreaInsets();
   const { language, setLanguage, t } = useLanguage();
+  const { getFullName, getFirstNameOnly } = useUser();
   const [currentView, setCurrentView] = useState<'main' | 'personal_info'>(initialView);
   const [isOnJob, setIsOnJob] = useState(false);
   const [isLanguageExpanded, setIsLanguageExpanded] = useState(false);
@@ -114,8 +116,7 @@ export function ProfileScreen({
               </Pressable>
 
               <View style={styles.personalNameRow}>
-                <Text style={styles.personalName}>Kasambahay</Text>
-                <Ionicons name="checkmark-circle" size={18} color="#4CAF50" style={{ marginLeft: 6 }} />
+                <Text style={styles.personalName}>{getFullName()}</Text>
               </View>
               <Text style={styles.personalRole}>Housekeeper & Cook</Text>
 
@@ -195,8 +196,7 @@ export function ProfileScreen({
 
               <View style={styles.profileDetails}>
                 <View style={styles.nameRow}>
-                  <Text style={styles.profileName}>Kasambahay</Text>
-                  <Ionicons name="checkmark-circle" size={18} color="#4CAF50" style={{ marginLeft: 6 }} />
+                  <Text style={styles.profileName}>{getFullName()}</Text>
                 </View>
                 <Text style={styles.profilePhone}>+63 951 885 9238</Text>
                 <View style={styles.roleBadge}>

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { API_BASE_URL, fetchWithTimeout } from '../config/api';
+import { useUser } from '../context/UserContext';
 
 const logoSource = require('../../assets/serbisure-logo.png');
 
@@ -14,27 +16,83 @@ type RegistrationScreenProps = {
 
 export function RegistrationScreen({ role, onBack, onNext, onCancel }: RegistrationScreenProps) {
   const insets = useSafeAreaInsets();
+  const { updateUser } = useUser();
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('+63');
+  const [rawPhone, setRawPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const isHomeowner = role === 'homeowner';
 
+  const formatDjangoError = (data: any): string => {
+    if (!data) return "An unexpected error occurred. Please try again.";
+    if (typeof data === 'string') return data;
+    if (data.detail) return String(data.detail);
+    if (data.message) return String(data.message);
+
+    if (typeof data === 'object') {
+      const messages: string[] = [];
+      for (const [key, value] of Object.entries(data)) {
+        const fieldName = key
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (char) => char.toUpperCase());
+
+        const valList = Array.isArray(value) ? value : [value];
+        valList.forEach((msg) => {
+          if (key === 'non_field_errors' || key === 'detail') {
+            messages.push(`• ${msg}`);
+          } else {
+            messages.push(`• ${fieldName}: ${msg}`);
+          }
+        });
+      }
+      if (messages.length > 0) {
+        return messages.join('\n');
+      }
+    }
+
+    return "Registration failed. Please check your entries and try again.";
+  };
+
   const handleRegister = async () => {
-    if (!termsAccepted || !privacyAccepted) {
-      Alert.alert("Required", "Please accept the terms and privacy policy.");
+    const cleanDigits = rawPhone.replace(/\D/g, '').replace(/^0+/, '');
+    const contactNumber = `+63${cleanDigits}`;
+
+    if (!firstName.trim()) {
+      Alert.alert("Missing Field", "Please enter your First Name.");
+      return;
+    }
+    if (!lastName.trim()) {
+      Alert.alert("Missing Field", "Please enter your Last Name.");
+      return;
+    }
+    if (!email.trim() || !email.includes('@')) {
+      Alert.alert("Invalid Email", "Please enter a valid email address.");
+      return;
+    }
+    if (cleanDigits.length < 10) {
+      Alert.alert("Invalid Contact Number", "Please enter a valid 10-digit mobile number starting after +63 (e.g. 9518859238).");
+      return;
+    }
+    if (password.length < 11) {
+      Alert.alert("Password Requirements", "Password must be at least 11 characters long with a letter and a number.");
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match.");
+      Alert.alert("Password Mismatch", "Password and Confirm Password do not match.");
+      return;
+    }
+    if (!termsAccepted || !privacyAccepted) {
+      Alert.alert("Consent Required", "Please accept both the Terms & Conditions and Data Privacy Policy.");
       return;
     }
 
@@ -47,7 +105,7 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
         email: email,
         password: password,
         account_type: isHomeowner ? "Homeowner" : "Kasambahay",
-        contact_number: phoneNumber,
+        contact_number: contactNumber,
       };
 
       const generateUUID = () => {
@@ -59,8 +117,10 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
 
       const idempotencyKey = generateUUID();
 
-      // Using your local IP address since 127.0.0.1 wouldn't work on the physical phone
-      const response = await fetch("http://192.168.1.9:8000/api/v1/accounts/register/", {
+      // Save user name globally in UserContext
+      updateUser({ firstName, middleName, lastName });
+
+      const response = await fetchWithTimeout(`${API_BASE_URL}/api/v1/accounts/register/`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -71,14 +131,15 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
 
       const data = await response.json();
       if (response.ok) {
-        Alert.alert("Success", "Registration successful!");
+        Alert.alert("Success", "Account created successfully!");
         if (onNext) onNext(data.access);
       } else {
-        // Show validation errors from Django (like password rules, duplicate email, etc.)
-        Alert.alert("Registration Failed", JSON.stringify(data));
+        // Show clean formatted validation errors instead of raw JSON string
+        const cleanErrorMessage = formatDjangoError(data);
+        Alert.alert("Registration Failed", cleanErrorMessage);
       }
     } catch (error: any) {
-      Alert.alert("Network Error", error.message);
+      Alert.alert("Network Error", error.message || "Unable to connect to the server.");
     } finally {
       setLoading(false);
     }
@@ -105,7 +166,7 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
           <Text style={styles.subtitle}>
             {isHomeowner
               ? 'Join as a homeowner to find trusted professionals for your household.'
-              : 'Start your journey as a trusted professional. Fill in your details below to create your Kasambahay profile.'}
+              : 'Join as a kasambahay to offer your trusted household services.'}
           </Text>
         </View>
 
@@ -118,69 +179,113 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
                 <View style={styles.stepDot} />
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>First Name</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="person" size={16} color="#000" style={styles.inputIcon} />
-                  <TextInput style={styles.input} placeholder="Juan" placeholderTextColor="#999" value={firstName} onChangeText={setFirstName} />
-                </View>
+              <View style={styles.inputContainer}>
+                <Ionicons name="person" size={18} color="#000000" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="First Name"
+                  placeholderTextColor="#999"
+                  value={firstName}
+                  onChangeText={setFirstName}
+                />
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Middle Name (Optional)</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="person" size={16} color="#000" style={styles.inputIcon} />
-                  <TextInput style={styles.input} placeholder="Santos" placeholderTextColor="#999" value={middleName} onChangeText={setMiddleName} />
-                </View>
+              <View style={styles.inputContainer}>
+                <Ionicons name="person" size={18} color="#000000" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Middle Name (Optional)"
+                  placeholderTextColor="#999"
+                  value={middleName}
+                  onChangeText={setMiddleName}
+                />
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Last Name</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="person" size={16} color="#000" style={styles.inputIcon} />
-                  <TextInput style={styles.input} placeholder="Dela Cruz" placeholderTextColor="#999" value={lastName} onChangeText={setLastName} />
-                </View>
+              <View style={styles.inputContainer}>
+                <Ionicons name="person" size={18} color="#000000" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Last Name"
+                  placeholderTextColor="#999"
+                  value={lastName}
+                  onChangeText={setLastName}
+                />
               </View>
 
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Phone Number</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="call" size={16} color="#000" style={styles.inputIcon} />
-                  <TextInput style={styles.input} keyboardType="phone-pad" value={phoneNumber} onChangeText={setPhoneNumber} />
+              <View style={styles.inputContainer}>
+                <View style={styles.countryCodeBadge}>
+                  <Text style={styles.flagEmoji}>🇵🇭</Text>
+                  <Text style={styles.countryCodeText}>+63</Text>
                 </View>
+                <View style={styles.phoneVerticalLine} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="912 345 6789"
+                  placeholderTextColor="#999"
+                  keyboardType="phone-pad"
+                  maxLength={11}
+                  value={rawPhone}
+                  onChangeText={setRawPhone}
+                />
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Email</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="mail" size={16} color="#000" style={styles.inputIcon} />
-                  <TextInput style={styles.input} keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
-                </View>
+              <View style={styles.inputContainer}>
+                <Ionicons name="mail" size={18} color="#000000" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email"
+                  placeholderTextColor="#999"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={setEmail}
+                />
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Password</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="lock-closed" size={16} color="#000" style={styles.inputIcon} />
-                  <TextInput style={styles.input} secureTextEntry value={password} onChangeText={setPassword} />
-                </View>
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed" size={18} color="#000000" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor="#999"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={18}
+                    color="#000000"
+                  />
+                </Pressable>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Confirm Password</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="lock-closed" size={16} color="#000" style={styles.inputIcon} />
-                  <TextInput style={styles.input} secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
-                </View>
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed" size={18} color="#000000" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm Password"
+                  placeholderTextColor="#999"
+                  secureTextEntry={!showConfirmPassword}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                />
+                <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeBtn}>
+                  <Ionicons
+                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={18}
+                    color="#000000"
+                  />
+                </Pressable>
               </View>
 
               <View style={styles.checkboxGroup}>
                 <Pressable style={styles.checkboxRow} onPress={() => setTermsAccepted(!termsAccepted)}>
                   <Ionicons
                     name={termsAccepted ? "checkbox-outline" : "square-outline"}
-                    size={16}
-                    color="#000"
+                    size={18}
+                    color="#000000"
                   />
                   <Text style={styles.checkboxText}>
                     I consent to <Text style={styles.linkText}>Terms and Conditions</Text>.
@@ -190,8 +295,8 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
                 <Pressable style={styles.checkboxRow} onPress={() => setPrivacyAccepted(!privacyAccepted)}>
                   <Ionicons
                     name={privacyAccepted ? "checkbox-outline" : "square-outline"}
-                    size={16}
-                    color="#000"
+                    size={18}
+                    color="#000000"
                   />
                   <Text style={styles.checkboxText}>
                     I consent to <Text style={styles.linkText}>Data Privacy Policy</Text>.
@@ -200,7 +305,7 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
               </View>
             </ScrollView>
 
-            <View>
+            <View style={styles.fixedFooter}>
               <View style={styles.divider} />
               <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={handleRegister} disabled={loading}>
                 {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>Next</Text>}
@@ -247,6 +352,7 @@ const styles = StyleSheet.create({
   titleBlock: {
     marginTop: 12,
     paddingHorizontal: 24,
+    minHeight: 66,
   },
   title: {
     color: '#000000',
@@ -368,30 +474,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFB43B',
   },
   formGroup: {
-    marginBottom: 16,
+    marginBottom: 10,
   },
   label: {
     fontSize: 11,
     fontWeight: '600',
     color: '#000000',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    height: 34,
+    backgroundColor: '#F6F7F9',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    height: 44,
+    marginBottom: 12,
   },
   inputIcon: {
-    marginRight: 8,
+    marginRight: 10,
+  },
+  countryCodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  flagEmoji: {
+    fontSize: 16,
+    marginRight: 5,
+  },
+  countryCodeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  phoneVerticalLine: {
+    width: 1,
+    height: 18,
+    backgroundColor: '#CCCCCC',
+    marginHorizontal: 10,
   },
   input: {
     flex: 1,
-    fontSize: 13,
-    color: '#000',
+    fontSize: 13.5,
+    color: '#1A1A1A',
     height: '100%',
+  },
+  eyeBtn: {
+    paddingLeft: 8,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   specializationRow: {
     flexDirection: 'row',
@@ -429,9 +561,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  fixedFooter: {
+    paddingTop: 8,
+  },
   checkboxGroup: {
-    marginTop: 12,
-    gap: 14,
+    marginTop: 8,
+    marginBottom: 6,
+    paddingHorizontal: 4,
+    gap: 10,
   },
   checkboxRow: {
     flexDirection: 'row',
@@ -449,8 +586,8 @@ const styles = StyleSheet.create({
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#707070',
-    marginTop: 16,
-    marginBottom: 12,
+    marginTop: 10,
+    marginBottom: 10,
     width: '100%',
   },
   primaryButton: {

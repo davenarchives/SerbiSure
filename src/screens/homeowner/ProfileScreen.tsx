@@ -4,12 +4,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useLanguage, type Language } from '../../context/LanguageContext';
+import { useUser } from '../../context/UserContext';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
 
 export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar, onBack, onLogout }: { avatarUri?: string | null, initialView?: 'main' | 'personal_info', onUpdateAvatar?: (uri: string) => void, onBack?: () => void, onLogout?: () => void }) {
   const insets = useSafeAreaInsets();
   const { language, setLanguage, t } = useLanguage();
+  const { getFullName, getFirstNameOnly } = useUser();
   const [currentView, setCurrentView] = useState<'main' | 'personal_info'>(initialView);
   const [isLanguageExpanded, setIsLanguageExpanded] = useState(false);
   const [localAvatar, setLocalAvatar] = useState<string | null>(avatarUri || null);
@@ -101,8 +103,7 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
               </Pressable>
               
               <View style={styles.personalNameRow}>
-                <Text style={styles.personalName}>Homeowner</Text>
-                <Ionicons name="checkmark-circle" size={18} color="#4CAF50" style={{ marginLeft: 6 }} />
+                <Text style={styles.personalName}>{getFullName()}</Text>
               </View>
               <Text style={styles.personalRole}>Homeowner</Text>
               
@@ -131,7 +132,7 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
 
             {/* About Section */}
             <View style={styles.aboutSection}>
-              <Text style={styles.sectionTitle}>{t.aboutTitle} Homeowner</Text>
+              <Text style={styles.sectionTitle}>{t.aboutTitle} {getFirstNameOnly()}</Text>
               <Text style={styles.aboutText}>
                 I'm a homeowner in Cagayan de Oro with two kids and a pet cat. I'm looking for a reliable nanny who can help care for my children, assist with daily routines, and be comfortable around pets while keeping our home safe and organized.
               </Text>
@@ -178,8 +179,7 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
               
               <View style={styles.profileDetails}>
                 <View style={styles.nameRow}>
-                  <Text style={styles.profileName}>Homeowner</Text>
-                  <Ionicons name="checkmark-circle" size={18} color="#4CAF50" style={{ marginLeft: 6 }} />
+                  <Text style={styles.profileName}>{getFullName()}</Text>
                 </View>
                 <Text style={styles.profilePhone}>+63 951 885 9238</Text>
                 <View style={styles.roleBadge}>
