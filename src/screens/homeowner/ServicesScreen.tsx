@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { chatStore } from '../../store/chatStore';
 import { ChatDetailScreen } from '../ChatDetailScreen';
+import { API_BASE_URL, fetchWithTimeout } from '../../config/api';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -92,7 +93,7 @@ const INITIAL_WORKER_PROFILES: WorkerProfile[] = [
 
 const FILTER_TABS = ['Top Rated', 'Cleaning', 'Cooking'];
 
-export function ServicesScreen({ avatarUri, onViewProfile }: { avatarUri?: string | null, onViewProfile?: () => void }) {
+export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?: string | null, onViewProfile?: () => void, token?: string | null }) {
   const insets = useSafeAreaInsets();
   const today = new Date();
   const dateString = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase();
@@ -111,6 +112,43 @@ export function ServicesScreen({ avatarUri, onViewProfile }: { avatarUri?: strin
     role: '',
     avatar: '',
   });
+
+  const fetchFeed = async () => {
+    if (!token) return;
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/api/v1/booking/feed/`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const liveProfiles = data.map((item: any) => {
+          const categories = Array.isArray(item.service_category)
+            ? item.service_category
+            : (item.service_category ? [item.service_category] : ['General']);
+          return {
+            id: item.booking_id,
+            name: item.name || 'Anonymous User',
+            location: item.service_address || 'Unknown City',
+            role: categories.join(', '),
+            years: 'Available Now',
+            tags: categories,
+            price: `P ${item.daily_rate || '0'}`,
+            image: item.profile_link || 'https://i.pravatar.cc/150?u=serbisure',
+            avatar: item.profile_link || 'https://i.pravatar.cc/150?u=serbisure',
+          };
+        });
+        setProfiles(liveProfiles);
+      }
+    } catch (error) {
+      console.error("Failed to load feed from backend", error);
+    }
+  };
+
+  // Run once when the screen opens
+  useEffect(() => {
+    fetchFeed();
+  }, [token]);
 
   // Floating Count (+1 / -1) Animation Values
   const plusAnim = useRef(new Animated.Value(0)).current;
@@ -243,7 +281,7 @@ export function ServicesScreen({ avatarUri, onViewProfile }: { avatarUri?: strin
   const card2 = profiles[2];
 
   const handleResetDeck = () => {
-    setProfiles(INITIAL_WORKER_PROFILES);
+    fetchFeed()
     position.setValue({ x: 0, y: 0 });
   };
 

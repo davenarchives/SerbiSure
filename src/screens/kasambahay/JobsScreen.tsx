@@ -110,7 +110,7 @@ const INITIAL_JOB_OPENINGS: JobOpening[] = [
 
 const FILTER_TABS = ['Stay-in', 'Part-time', 'Nearby'];
 
-export function JobsScreen({ onViewProfile }: { onViewProfile?: () => void } = {}) {
+export function JobsScreen({ onViewProfile, token }: { onViewProfile?: () => void, token?: string | null } = {}) {
   const insets = useSafeAreaInsets();
   const [jobs, setJobs] = useState<JobOpening[]>(INITIAL_JOB_OPENINGS);
   const [activeFilter, setActiveFilter] = useState('Stay-in');
