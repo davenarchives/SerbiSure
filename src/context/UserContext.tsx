@@ -4,6 +4,7 @@ type UserData = {
   firstName: string;
   middleName: string;
   lastName: string;
+  profileLink?: string | null
 };
 
 type UserContextType = {
@@ -65,6 +66,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode, token?: string 
           firstName: decoded.first_name || '',
           middleName: decoded.middle_name || '',
           lastName: decoded.last_name || '',
+          profileLink: decoded.profile_link || null
         })
       }
       else {
