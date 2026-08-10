@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 type UserData = {
   firstName: string;
@@ -22,8 +22,59 @@ const defaultUser: UserData = {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+function parseJWT(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+
+    if (!base64Url) {
+      return null;
+    }
+
+    let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4) { base64 += '='; }
+
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+
+    let str = base64.replace(/=+$/, '');
+    let output = '';
+
+    for (
+      let bc = 0, bs = 0, buffer, i = 0;
+      (buffer = str.charAt(i++));
+      ~buffer && ((bs = bc % 4 ? bs * 64 + buffer : buffer), bc++ % 4) ? (output += String.fromCharCode(255 & (bs >> ((-2 * bc) & 6)))) : 0
+    ) {
+      buffer = chars.indexOf(buffer);
+    }
+
+    return JSON.parse(output)
+  }
+  catch (error) {
+    return null
+  }
+}
+
+export const UserProvider: React.FC<{ children: React.ReactNode, token?: string | null }> = ({ children, token }) => {
   const [user, setUser] = useState<UserData>(defaultUser);
+
+  useEffect(() => {
+    if (token) {
+      const decoded = parseJWT(token)
+
+      if (decoded) {
+        setUser({
+          firstName: decoded.first_name || '',
+          middleName: decoded.middle_name || '',
+          lastName: decoded.last_name || '',
+        })
+      }
+      else {
+        setUser({ firstName: '', middleName: '', lastName: '' })
+      }
+    }
+    else {
+      setUser({ firstName: '', middleName: '', lastName: '' })
+    }
+  }, [token])
 
   const updateUser = (data: Partial<UserData>) => {
     setUser((prev) => ({ ...prev, ...data }));

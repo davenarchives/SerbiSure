@@ -38,88 +38,88 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <UserProvider>
+      <UserProvider token={accessToken}>
         <LanguageProvider>
-        <StatusBar style={flowState === 'registration3' ? 'light' : 'dark'} />
+          <StatusBar style={flowState === 'registration3' ? 'light' : 'dark'} />
 
-        {/* Step 1 & 1.5: Landing Page & Animated Login Flow */}
-        {(flowState === 'landing' || flowState === 'login') && (
-          <LandingScreen
-            isLoginView={flowState === 'login'}
-            onGetStarted={() => setFlowState('user_selection')}
-            onLoginPress={() => setFlowState('login')}
-            onBackToLanding={() => setFlowState('landing')}
-            onLoginSuccess={(token?: string) => {
-              if (token) setAccessToken(token);
-              setFlowState('dashboard');
-            }}
-            onSignUp={() => setFlowState('user_selection')}
-          />
-        )}
+          {/* Step 1 & 1.5: Landing Page & Animated Login Flow */}
+          {(flowState === 'landing' || flowState === 'login') && (
+            <LandingScreen
+              isLoginView={flowState === 'login'}
+              onGetStarted={() => setFlowState('user_selection')}
+              onLoginPress={() => setFlowState('login')}
+              onBackToLanding={() => setFlowState('landing')}
+              onLoginSuccess={(token?: string) => {
+                if (token) setAccessToken(token);
+                setFlowState('dashboard');
+              }}
+              onSignUp={() => setFlowState('user_selection')}
+            />
+          )}
 
-        {/* Step 2: User Selection (Homeowner / Kasambahay) */}
-        {flowState === 'user_selection' && (
-          <UserSelectionScreen
-            onSelectRole={handleSelectRole}
-            onBack={() => setFlowState('landing')}
-          />
-        )}
+          {/* Step 2: User Selection (Homeowner / Kasambahay) */}
+          {flowState === 'user_selection' && (
+            <UserSelectionScreen
+              onSelectRole={handleSelectRole}
+              onBack={() => setFlowState('landing')}
+            />
+          )}
 
-        {/* Step 3: Registration 1 - Account Form Details */}
-        {flowState === 'registration1' && (
-          <RegistrationStep1
-            role={selectedRole}
-            onBack={() => setFlowState('user_selection')}
-            onNext={(token?: string) => {
-              if (token) setAccessToken(token);
-              setFlowState('registration2');
-            }}
-            onCancel={() => setFlowState('landing')}
-          />
-        )}
+          {/* Step 3: Registration 1 - Account Form Details */}
+          {flowState === 'registration1' && (
+            <RegistrationStep1
+              role={selectedRole}
+              onBack={() => setFlowState('user_selection')}
+              onNext={(token?: string) => {
+                if (token) setAccessToken(token);
+                setFlowState('registration2');
+              }}
+              onCancel={() => setFlowState('landing')}
+            />
+          )}
 
-        {/* Step 4: Registration 2 - Take a Selfie / Mandatory Liveness Verification */}
-        {flowState === 'registration2' && (
-          <RegistrationStep3
-            token={accessToken}
-            onVerified={(result) => {
-              if (result.selfiePath) {
-                const uri = result.selfiePath.startsWith('data:') || result.selfiePath.startsWith('file:')
-                  ? result.selfiePath
-                  : `file://${result.selfiePath}`;
-                setAvatarUri(uri);
-              }
-              setFlowState('registration3');
-            }}
-            onBack={() => setFlowState('registration1')}
-            onCancel={() => setFlowState('landing')}
-          />
-        )}
+          {/* Step 4: Registration 2 - Take a Selfie / Mandatory Liveness Verification */}
+          {flowState === 'registration2' && (
+            <RegistrationStep3
+              token={accessToken}
+              onVerified={(result) => {
+                if (result.selfiePath) {
+                  const uri = result.selfiePath.startsWith('data:') || result.selfiePath.startsWith('file:')
+                    ? result.selfiePath
+                    : `file://${result.selfiePath}`;
+                  setAvatarUri(uri);
+                }
+                setFlowState('registration3');
+              }}
+              onBack={() => setFlowState('registration1')}
+              onCancel={() => setFlowState('landing')}
+            />
+          )}
 
-        {/* Step 5: Registration 3 - Verify Identity / Document Upload (Optional & Skippable) */}
-        {flowState === 'registration3' && (
-          <RegistrationStep2
-            role={selectedRole}
-            token={accessToken}
-            onBack={() => setFlowState('registration2')}
-            onNext={() => setFlowState('dashboard')}
-            onCancel={() => setFlowState('landing')}
-            onSkip={() => setFlowState('dashboard')}
-          />
-        )}
+          {/* Step 5: Registration 3 - Verify Identity / Document Upload (Optional & Skippable) */}
+          {flowState === 'registration3' && (
+            <RegistrationStep2
+              role={selectedRole}
+              token={accessToken}
+              onBack={() => setFlowState('registration2')}
+              onNext={() => setFlowState('dashboard')}
+              onCancel={() => setFlowState('landing')}
+              onSkip={() => setFlowState('dashboard')}
+            />
+          )}
 
-        {/* Step 6: Main Dashboard (Bottom Tab Navigator - Home, Services/Jobs, Chats, Profile) */}
-        {flowState === 'dashboard' && (
-          <BottomTabNavigator
-            role={selectedRole}
-            avatarUri={avatarUri}
-            token={accessToken}
-            onUpdateAvatar={(uri: string) => setAvatarUri(uri)}
-            onLogout={() => setFlowState('login')}
-          />
-        )}
-      </LanguageProvider>
-    </UserProvider>
-  </SafeAreaProvider>
+          {/* Step 6: Main Dashboard (Bottom Tab Navigator - Home, Services/Jobs, Chats, Profile) */}
+          {flowState === 'dashboard' && (
+            <BottomTabNavigator
+              role={selectedRole}
+              avatarUri={avatarUri}
+              token={accessToken}
+              onUpdateAvatar={(uri: string) => setAvatarUri(uri)}
+              onLogout={() => setFlowState('login')}
+            />
+          )}
+        </LanguageProvider>
+      </UserProvider>
+    </SafeAreaProvider>
   );
 }
