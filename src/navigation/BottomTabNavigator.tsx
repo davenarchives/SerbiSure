@@ -17,6 +17,8 @@ import { ProfileScreen as KasambahayProfileScreen } from '../screens/kasambahay/
 import { PostJobScreen } from '../screens/homeowner/PostJobScreen';
 import { PostServiceScreen } from '../screens/kasambahay/PostServiceScreen';
 
+import { useUser } from '../context/UserContext';
+
 export type Role = 'homeowner' | 'kasambahay';
 export type Tab = 'home' | 'services' | 'chats' | 'profile';
 
@@ -28,7 +30,9 @@ interface BottomTabNavigatorProps {
   onLogout?: () => void;
 }
 
-export function BottomTabNavigator({ role = 'homeowner', avatarUri, token, onUpdateAvatar, onLogout }: BottomTabNavigatorProps) {
+export function BottomTabNavigator({ role = 'homeowner', avatarUri: oldAvatarUri, token, onUpdateAvatar, onLogout }: BottomTabNavigatorProps) {
+
+  const { user } = useUser();
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<Tab>('home');
@@ -36,6 +40,7 @@ export function BottomTabNavigator({ role = 'homeowner', avatarUri, token, onUpd
   const [postJobVisible, setPostJobVisible] = useState(false);
 
   const isKasambahay = role === 'kasambahay';
+  const avatarUri = user.profileLink || oldAvatarUri
 
   const handleOpenProfileView = () => {
     setProfileInitialView('personal_info');
@@ -52,9 +57,9 @@ export function BottomTabNavigator({ role = 'homeowner', avatarUri, token, onUpd
         );
       case 'services':
         return isKasambahay ? (
-          <KasambahayJobsScreen onViewProfile={handleOpenProfileView} />
+          <KasambahayJobsScreen onViewProfile={handleOpenProfileView} token={token} />
         ) : (
-          <HomeownerServicesScreen avatarUri={avatarUri} onViewProfile={handleOpenProfileView} />
+          <HomeownerServicesScreen avatarUri={avatarUri} onViewProfile={handleOpenProfileView} token={token} />
         );
       case 'chats':
         return isKasambahay ? <KasambahayChatsScreen /> : <HomeownerChatsScreen />;
