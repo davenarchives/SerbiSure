@@ -4,7 +4,8 @@ type UserData = {
   firstName: string;
   middleName: string;
   lastName: string;
-  profileLink?: string | null
+  profileLink?: string | null;
+  accountType?: string;
 };
 
 type UserContextType = {
@@ -66,15 +67,16 @@ export const UserProvider: React.FC<{ children: React.ReactNode, token?: string 
           firstName: decoded.first_name || '',
           middleName: decoded.middle_name || '',
           lastName: decoded.last_name || '',
-          profileLink: decoded.profile_link || null
+          profileLink: decoded.profile_link || null,
+          accountType: decoded.account_type || ''
         })
       }
       else {
-        setUser({ firstName: '', middleName: '', lastName: '' })
+        setUser({ firstName: '', middleName: '', lastName: '', profileLink: null, accountType: '' })
       }
     }
     else {
-      setUser({ firstName: '', middleName: '', lastName: '' })
+      setUser({ firstName: '', middleName: '', lastName: '', accountType: '' })
     }
   }, [token])
 
