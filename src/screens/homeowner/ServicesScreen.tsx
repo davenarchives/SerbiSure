@@ -10,6 +10,7 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -93,6 +94,14 @@ const INITIAL_WORKER_PROFILES: WorkerProfile[] = [
 
 const FILTER_TABS = ['Top Rated', 'Cleaning', 'Cooking'];
 
+// Module-level cache: lives OUTSIDE the component so it survives tab switches.
+// useRef resets to null every time the component remounts — this does NOT.
+let feedCache: WorkerProfile[] | null = null;
+
+export const clearFeedCache = () => {
+  feedCache = null;
+};
+
 export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?: string | null, onViewProfile?: () => void, token?: string | null }) {
   const insets = useSafeAreaInsets();
   const today = new Date();
@@ -100,6 +109,8 @@ export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?
 
   const [profiles, setProfiles] = useState<WorkerProfile[]>(INITIAL_WORKER_PROFILES);
   const [activeFilter, setActiveFilter] = useState('Top Rated');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const [activeChat, setActiveChat] = useState<{
     visible: boolean;
     name: string;
@@ -113,8 +124,16 @@ export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?
     avatar: '',
   });
 
-  const fetchFeed = async () => {
+  // forceRefresh=true skips the cache and hits the API fresh (used for pull-to-refresh)
+  const fetchFeed = async (forceRefresh = false) => {
     if (!token) return;
+
+    // If we have cached data and this is NOT a manual refresh, use the cache!
+    if (!forceRefresh && feedCache !== null) {
+      setProfiles(feedCache);
+      return;
+    }
+
     try {
       const response = await fetchWithTimeout(`${API_BASE_URL}/api/v1/booking/feed/`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -138,6 +157,8 @@ export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?
             avatar: item.profile_link || 'https://i.pravatar.cc/150?u=serbisure',
           };
         });
+        // Save to cache and update state
+        feedCache = liveProfiles;
         setProfiles(liveProfiles);
       }
     } catch (error) {
@@ -145,7 +166,15 @@ export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?
     }
   };
 
-  // Run once when the screen opens
+  // Pull-to-refresh handler — forces a fresh API call and resets the swipe deck
+  const handlePullToRefresh = async () => {
+    setIsRefreshing(true);
+    position.setValue({ x: 0, y: 0 });
+    await fetchFeed(true); // forceRefresh=true bypasses the cache
+    setIsRefreshing(false);
+  };
+
+  // Only fetches on first load (or when token changes). Uses cache on tab switches.
   useEffect(() => {
     fetchFeed();
   }, [token]);
@@ -286,6 +315,21 @@ export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?
   };
 
   return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: '#F6F5F2' }}
+      contentContainerStyle={{ flex: 1 }}
+      scrollEnabled={isRefreshing || profiles.length === 0}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={handlePullToRefresh}
+          colors={['#FFB43B']}
+          tintColor="#FFB43B"
+          title="Refreshing feed..."
+          titleColor="#888"
+        />
+      }
+    >
     <View style={styles.container}>
       {/* Top Status Bar Spacer */}
       <View style={{ height: insets.top, backgroundColor: '#F6F5F2', zIndex: 10 }} />
@@ -538,6 +582,7 @@ export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?
         initialMessage={activeChat.initialMessage}
       />
     </View>
+    </ScrollView>
   );
 }
 
