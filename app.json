@@ -33,9 +33,16 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_EXTERNAL_STORAGE"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ],
       "package": "com.serbisure.frontend"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2285d21a-6154-4ab6-84c9-bed6c4af2ce5"
+      }
+    },
+    "owner": "riasgremory"
   }
 }

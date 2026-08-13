@@ -8,10 +8,18 @@ import { useUser } from '../../context/UserContext';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
 
-export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar, onBack, onLogout }: { avatarUri?: string | null, initialView?: 'main' | 'personal_info', onUpdateAvatar?: (uri: string) => void, onBack?: () => void, onLogout?: () => void }) {
+type ProfileScreenProps = Readonly<{
+  avatarUri?: string | null;
+  initialView?: 'main' | 'personal_info';
+  onUpdateAvatar?: (uri: string) => void;
+  onBack?: () => void;
+  onLogout?: () => void;
+}>;
+
+export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar, onBack, onLogout }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const { language, setLanguage, t } = useLanguage();
-  const { getFullName, getFirstNameOnly } = useUser();
+  const { getFullName, getFirstNameOnly, user } = useUser();
   const [currentView, setCurrentView] = useState<'main' | 'personal_info'>(initialView);
   const [isLanguageExpanded, setIsLanguageExpanded] = useState(false);
   const [localAvatar, setLocalAvatar] = useState<string | null>(avatarUri || null);
@@ -59,7 +67,7 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
     <View style={[styles.container, currentView === 'personal_info' && { backgroundColor: '#F9F8F6' }]}>
       {/* Top Status Bar Spacer */}
       <View style={{ height: insets.top, backgroundColor: currentView === 'personal_info' ? 'transparent' : '#FFF0DB', zIndex: 10 }} />
-      <ScrollView 
+      <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingTop: 0 }]}
         showsVerticalScrollIndicator={false}
@@ -67,8 +75,8 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
       >
         {/* Backgrounds */}
         {currentView === 'personal_info' ? (
-          <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=800' }} 
+          <Image
+            source={{ uri: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&q=80&w=800' }}
             style={{ width: '100%', height: 220, position: 'absolute', top: 0 }}
           />
         ) : (
@@ -78,10 +86,10 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
         {/* Header Row (Scrolls with content) */}
         <View style={[styles.headerRow, { marginTop: 10, marginBottom: 16 }]}>
           <Pressable onPress={() => currentView === 'personal_info' ? setCurrentView('main') : onBack?.()}>
-            <Ionicons 
-              name="arrow-back" 
-              size={24} 
-              color={currentView === 'personal_info' ? "#FFB43B" : "#333"} 
+            <Ionicons
+              name="arrow-back"
+              size={24}
+              color={currentView === 'personal_info' ? "#FFB43B" : "#333"}
             />
           </Pressable>
           <Image source={logoSource} style={styles.logo} resizeMode="contain" />
@@ -93,27 +101,27 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
             {/* Beige Info Card */}
             <View style={styles.personalInfoCard}>
               <Pressable style={styles.personalAvatarWrapper} onPress={handlePickImage}>
-                <Image 
-                  source={{ uri: localAvatar || avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }} 
-                  style={styles.personalAvatar} 
+                <Image
+                  source={{ uri: localAvatar || avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }}
+                  style={styles.personalAvatar}
                 />
                 <View style={styles.editIconBadge}>
                   <Ionicons name="camera" size={12} color="#FFF" />
                 </View>
               </Pressable>
-              
+
               <View style={styles.personalNameRow}>
                 <Text style={styles.personalName}>{getFullName()}</Text>
               </View>
-              <Text style={styles.personalRole}>Homeowner</Text>
-              
+              <Text style={styles.personalRole}>{user.accountType || 'Homeowner'}</Text>
+
               <View style={styles.locationRow}>
                 <Ionicons name="location-outline" size={14} color="#555" />
                 <Text style={styles.locationText}>Cagayan de Oro, Misamis Oriental</Text>
               </View>
 
               <View style={styles.sentimentDivider} />
-              
+
               <View style={styles.sentimentRow}>
                 <Text style={styles.sentimentLabel}>{t.workerSentiment}</Text>
                 <View style={styles.sentimentBarBg}>
@@ -148,7 +156,7 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
               <View style={styles.reviewCard}>
                 <View style={styles.reviewCardHeader}>
                   <View style={styles.starsRow}>
-                    {[1,2,3,4,5].map(i => <Ionicons key={i} name="star" size={14} color="#FFB43B" style={{marginRight: 2}} />)}
+                    {[1, 2, 3, 4, 5].map(i => <Ionicons key={i} name="star" size={14} color="#FFB43B" style={{ marginRight: 2 }} />)}
                   </View>
                   <View style={styles.positiveBadge}>
                     <Text style={styles.positiveBadgeText}>{t.positive}</Text>
@@ -168,49 +176,49 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
           <React.Fragment>
             <View style={styles.profileInfoContainer}>
               <Pressable style={styles.avatarWrapper} onPress={handlePickImage}>
-                <Image 
-                  source={{ uri: localAvatar || avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }} 
-                  style={styles.avatar} 
+                <Image
+                  source={{ uri: localAvatar || avatarUri || 'https://i.pravatar.cc/150?u=serbisure' }}
+                  style={styles.avatar}
                 />
                 <View style={styles.editIconBadge}>
                   <Ionicons name="camera" size={12} color="#FFF" />
                 </View>
               </Pressable>
-              
+
               <View style={styles.profileDetails}>
                 <View style={styles.nameRow}>
                   <Text style={styles.profileName}>{getFullName()}</Text>
                 </View>
                 <Text style={styles.profilePhone}>+63 951 885 9238</Text>
                 <View style={styles.roleBadge}>
-                  <Text style={styles.roleText}>HOMEOWNER</Text>
+                  <Text style={styles.roleText}>{(user.accountType || 'HOMEOWNER').toUpperCase()}</Text>
                 </View>
               </View>
             </View>
 
             <View style={styles.settingsCard}>
-              <SettingsItem 
-                icon="person-outline" 
-                label={t.personalInfo} 
-                onPress={() => setCurrentView('personal_info')} 
+              <SettingsItem
+                icon="person-outline"
+                label={t.personalInfo}
+                onPress={() => setCurrentView('personal_info')}
               />
               <View style={styles.divider} />
               <SettingsItem icon="lock-closed-outline" label={t.passwordsSecurity} />
               <View style={styles.divider} />
               <SettingsItem icon="checkmark-circle-outline" label={t.getVerified} iconColor="#4CAF50" />
-              
+
               <View style={styles.sectionSpacing} />
-              
+
               <SettingsItem icon="notifications-outline" label={t.notifications} />
               <View style={styles.divider} />
-              <SettingsItem 
-                icon="globe-outline" 
-                label={t.language} 
+              <SettingsItem
+                icon="globe-outline"
+                label={t.language}
                 zIndex={1000}
                 rightComponent={
                   <View style={{ position: 'relative', zIndex: 9999 }}>
-                    <Pressable 
-                      style={styles.languageSelector} 
+                    <Pressable
+                      style={styles.languageSelector}
                       onPress={() => setIsLanguageExpanded(!isLanguageExpanded)}
                     >
                       <Text style={styles.languageText}>{language}</Text>
@@ -242,23 +250,23 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
                       </View>
                     )}
                   </View>
-                } 
+                }
                 onPress={() => setIsLanguageExpanded(!isLanguageExpanded)}
               />
-              
+
               <View style={styles.sectionSpacing} />
-              
+
               <SettingsItem icon="help-circle-outline" label={t.aboutUs} />
               <View style={styles.divider} />
               <SettingsItem icon="shield-checkmark-outline" label={t.privacyPolicy} />
-              
+
               <View style={styles.sectionSpacing} />
-              
-              <Pressable 
+
+              <Pressable
                 style={({ pressed }) => [
                   styles.settingsItem,
                   pressed && { backgroundColor: '#FFF0F0', borderRadius: 8, paddingHorizontal: 16, marginHorizontal: -16 }
-                ]} 
+                ]}
                 onPress={onLogout}
               >
                 {({ pressed }) => (
@@ -268,7 +276,7 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
                   </>
                 )}
               </Pressable>
-              
+
               {/* Bottom padding for tab bar */}
               <View style={{ height: 85 }} />
             </View>
@@ -286,7 +294,7 @@ function SettingsItem({ icon, label, iconColor = "#FFB43B", hideChevron = false,
         <Ionicons name={icon} size={20} color={iconColor} />
       </View>
       <Text style={styles.settingsLabel} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
-      {rightComponent ? rightComponent : (!hideChevron && <Ionicons name="chevron-forward" size={16} color="#FFB43B" />)}
+      {rightComponent || (!hideChevron && <Ionicons name="chevron-forward" size={16} color="#FFB43B" />)}
     </Pressable>
   );
 }

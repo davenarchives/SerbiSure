@@ -26,7 +26,7 @@ New-Item -ItemType Directory -Force -Path $projectCacheDir | Out-Null
 
 Push-Location $androidDir
 try {
-  & .\gradlew.bat --project-cache-dir $projectCacheDir app:assembleDebug -x lint -x test --no-watch-fs "-PreactNativeDevServerPort=8082" "-PreactNativeArchitectures=arm64-v8a,armeabi-v7a"
+  & .\gradlew.bat --project-cache-dir $projectCacheDir app:assembleRelease -x lint -x test --no-watch-fs "-PreactNativeDevServerPort=8082" "-PreactNativeArchitectures=arm64-v8a,armeabi-v7a"
 } finally {
   Pop-Location
 }

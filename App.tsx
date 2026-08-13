@@ -12,6 +12,7 @@ import {
   RegistrationStep2,
   RegistrationStep3,
 } from './src/screens';
+import { clearFeedCache } from './src/screens/homeowner/ServicesScreen';
 import { BottomTabNavigator, type Role } from './src/navigation/BottomTabNavigator';
 
 // Clean App Navigation Flow matching Figma structure:
@@ -115,7 +116,12 @@ export default function App() {
               avatarUri={avatarUri}
               token={accessToken}
               onUpdateAvatar={(uri: string) => setAvatarUri(uri)}
-              onLogout={() => setFlowState('login')}
+              onLogout={() => {
+                clearFeedCache();
+                setAccessToken(null);
+                setAvatarUri(null);
+                setFlowState('login');
+              }}
             />
           )}
         </LanguageProvider>
