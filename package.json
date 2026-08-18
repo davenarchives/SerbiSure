@@ -8,7 +8,9 @@
     "android": "expo run:android",
     "android:build": "powershell -ExecutionPolicy Bypass -File ./scripts/android-build.ps1",
     "ios": "expo run:ios",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "admin": "npm --prefix admin run dev",
+    "admin:build": "npm --prefix admin run build"
   },
   "dependencies": {
     "@shopify/react-native-skia": "^1.5.0",
