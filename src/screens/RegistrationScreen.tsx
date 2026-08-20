@@ -63,9 +63,20 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
     return "Registration failed. Please check your entries and try again.";
   };
 
+  const handlePhoneChange = (text: string) => {
+    let digits = text.replace(/\D/g, '');
+    if (digits.startsWith('0')) {
+      digits = digits.substring(1);
+    }
+    if (digits.length > 10) {
+      digits = digits.slice(0, 10);
+    }
+    setRawPhone(digits);
+  };
+
   const handleRegister = async () => {
     const cleanDigits = rawPhone.replace(/\D/g, '').replace(/^0+/, '');
-    const contactNumber = `+63${cleanDigits}`;
+    const contactNumber = `63${cleanDigits}`;
 
     if (!firstName.trim()) {
       Alert.alert("Missing Field", "Please enter your First Name.");
@@ -79,8 +90,8 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
       Alert.alert("Invalid Email", "Please enter a valid email address.");
       return;
     }
-    if (cleanDigits.length < 10) {
-      Alert.alert("Invalid Contact Number", "Please enter a valid 10-digit mobile number starting after +63 (e.g. 9518859238).");
+    if (cleanDigits.length !== 10 || !cleanDigits.startsWith('9')) {
+      Alert.alert("Invalid Contact Number", "Please enter a valid 10-digit mobile number starting with 9 (e.g. 9123456789).");
       return;
     }
     if (password.length < 11) {
@@ -220,12 +231,12 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
                 <View style={styles.phoneVerticalLine} />
                 <TextInput
                   style={styles.input}
-                  placeholder="912 345 6789"
+                  placeholder="9123456789"
                   placeholderTextColor="#999"
                   keyboardType="phone-pad"
-                  maxLength={11}
+                  maxLength={10}
                   value={rawPhone}
-                  onChangeText={setRawPhone}
+                  onChangeText={handlePhoneChange}
                 />
               </View>
 
@@ -500,22 +511,22 @@ const styles = StyleSheet.create({
   },
   flagEmoji: {
     fontSize: 16,
-    marginRight: 5,
+    marginRight: 6,
   },
   countryCodeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1A1A1A',
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#111827',
   },
   phoneVerticalLine: {
     width: 1,
-    height: 18,
-    backgroundColor: '#CCCCCC',
-    marginHorizontal: 10,
+    height: 20,
+    backgroundColor: '#D1D5DB',
+    marginHorizontal: 12,
   },
   input: {
     flex: 1,
-    fontSize: 13.5,
+    fontSize: 14,
     color: '#1A1A1A',
     height: '100%',
   },
