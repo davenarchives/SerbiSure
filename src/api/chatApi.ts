@@ -82,6 +82,7 @@ export async function fetchChatInbox(token: string): Promise<ConversationPartner
 export interface FetchChatThreadResult {
   messages: ChatMessageItem[];
   partnerIsTyping: boolean;
+  partnerIsOnline?: boolean;
 }
 
 /**
@@ -105,22 +106,28 @@ export async function fetchChatThreadDetails(token: string, partnerId: string): 
   const json = await res.json();
   let messages: ChatMessageItem[] = [];
   let partnerIsTyping = false;
+  let partnerIsOnline = false;
 
   if (Array.isArray(json)) {
     messages = json;
   } else if (Array.isArray(json?.data)) {
     messages = json.data;
     partnerIsTyping = Boolean(json.partner_is_typing);
+    partnerIsOnline = Boolean(json.partner_is_online);
   } else if (Array.isArray(json?.results)) {
     messages = json.results;
     partnerIsTyping = Boolean(json.partner_is_typing);
+    partnerIsOnline = Boolean(json.partner_is_online);
   }
 
   if (!partnerIsTyping && res.headers.get('x-partner-is-typing') === 'true') {
     partnerIsTyping = true;
   }
+  if (!partnerIsOnline && res.headers.get('x-partner-is-online') === 'true') {
+    partnerIsOnline = true;
+  }
 
-  return { messages, partnerIsTyping };
+  return { messages, partnerIsTyping, partnerIsOnline };
 }
 
 /**

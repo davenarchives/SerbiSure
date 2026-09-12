@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Platform,
   RefreshControl,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -240,6 +242,66 @@ export function NotificationsModal({
     }
   };
 
+  const panY = useRef(new Animated.Value(0)).current;
+  const isClosingRef = useRef(false);
+
+  const handleClose = useCallback(() => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    Animated.timing(panY, {
+      toValue: 700,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => {
+      onClose();
+      panY.setValue(0);
+      isClosingRef.current = false;
+    });
+  }, [onClose, panY]);
+
+  useEffect(() => {
+    if (visible) {
+      panY.setValue(0);
+      isClosingRef.current = false;
+    }
+  }, [visible, panY]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 4;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          // Dragging down: follows finger 1:1
+          panY.setValue(gestureState.dy);
+        } else {
+          // Dragging up: elastic rubber band resistance
+          panY.setValue(gestureState.dy * 0.22);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 90 || (gestureState.dy > 20 && gestureState.vy > 0.4)) {
+          handleClose();
+        } else {
+          Animated.spring(panY, {
+            toValue: 0,
+            damping: 22,
+            stiffness: 260,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  const backdropOpacity = panY.interpolate({
+    inputRange: [0, 300],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
   const renderItem = ({ item }: { item: NotificationItem }) => {
     const isUnread = item.notification_state === 'Unread';
     const meta = parseNotification(item);
@@ -299,64 +361,65 @@ export function NotificationsModal({
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          {/* Sheet Handle */}
-          <View style={styles.sheetHandleContainer}>
-            <View style={styles.sheetHandle} />
-          </View>
-
-          {/* Modal Header */}
-          <View style={styles.modalHeader}>
-            <View style={styles.headerTitleGroup}>
-              <Text style={styles.modalTitle}>Notifications</Text>
-              {unreadCount > 0 ? (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
-                </View>
-              ) : null}
+      <Animated.View style={[styles.modalOverlay, { opacity: backdropOpacity }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+        <Animated.View
+          style={[
+            styles.modalContainer,
+            {
+              transform: [{ translateY: panY }],
+            },
+          ]}
+        >
+          {/* Swipable Handle & Header Area */}
+          <View {...panResponder.panHandlers} style={styles.swipableHeaderArea}>
+            {/* Sheet Handle */}
+            <View style={styles.sheetHandleContainer}>
+              <View style={styles.sheetHandle} />
             </View>
 
-            <View style={styles.headerActions}>
-              {unreadCount > 0 ? (
-                <Pressable
-                  onPress={handleMarkAllRead}
-                  disabled={markingAll}
-                  style={({ pressed }) => [
-                    styles.markAllBtn,
-                    pressed && styles.btnPressed,
-                  ]}
-                  hitSlop={6}
-                >
-                  {markingAll ? (
-                    <ActivityIndicator size="small" color={THEME.colors.brandDark} />
-                  ) : (
-                    <>
-                      <Ionicons
-                        name="checkmark-done"
-                        size={15}
-                        color={THEME.colors.brandDark}
-                        style={{ marginRight: 4 }}
-                      />
-                      <Text style={styles.markAllBtnText}>Mark all read</Text>
-                    </>
-                  )}
-                </Pressable>
-              ) : null}
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.headerTitleGroup}>
+                <Text style={styles.modalTitle}>Notifications</Text>
+                {unreadCount > 0 ? (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
 
-              <Pressable
-                onPress={onClose}
-                hitSlop={8}
-                style={({ pressed }) => [
-                  styles.closeBtn,
-                  pressed && styles.btnPressed,
-                ]}
-                accessibilityLabel="Close"
-              >
-                <Ionicons name="close" size={19} color="#4B5563" />
-              </Pressable>
+              <View style={styles.headerActions}>
+                {unreadCount > 0 ? (
+                  <Pressable
+                    onPress={handleMarkAllRead}
+                    disabled={markingAll}
+                    style={({ pressed }) => [
+                      styles.markAllBtn,
+                      pressed && styles.btnPressed,
+                    ]}
+                    hitSlop={6}
+                  >
+                    {markingAll ? (
+                      <ActivityIndicator size="small" color={THEME.colors.brandDark} />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name="checkmark-done"
+                          size={15}
+                          color={THEME.colors.brandDark}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={styles.markAllBtnText}>Mark all read</Text>
+                      </>
+                    )}
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           </View>
 
@@ -394,8 +457,8 @@ export function NotificationsModal({
               }
             />
           )}
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -413,6 +476,10 @@ const styles = StyleSheet.create({
     height: '84%',
     paddingBottom: Platform.OS === 'ios' ? 34 : 16,
     overflow: 'hidden',
+  },
+  swipableHeaderArea: {
+    width: '100%',
+    backgroundColor: THEME.colors.canvas,
   },
   sheetHandleContainer: {
     alignItems: 'center',
@@ -445,22 +512,26 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   unreadBadge: {
-    backgroundColor: THEME.colors.brandDark,
-    borderRadius: THEME.roundness.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    backgroundColor: '#EF4444',
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
     marginLeft: 8,
   },
   unreadBadgeText: {
     color: '#FFFFFF',
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '800',
     fontFamily: THEME.typography.fontFamily.mainBold,
+    includeFontPadding: false,
+    textAlign: 'center',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   markAllBtn: {
     flexDirection: 'row',
@@ -475,14 +546,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: THEME.typography.fontFamily.mainBold,
     color: THEME.colors.brandDark,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#EBEBE6',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   btnPressed: {
     opacity: 0.75,

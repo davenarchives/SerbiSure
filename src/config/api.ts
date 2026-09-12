@@ -37,10 +37,13 @@ function getLocalApiBaseUrl(): string {
 export const API_BASE_URL = getLocalApiBaseUrl();
 export const DEFAULT_TIMEOUT_MS = 15000; // 15 seconds
 
+let localBackendOfflineUntil = 0;
+
 /**
  * Smart Fetch wrapper with automatic fallback:
  * 1. Tries the local backend first (fastest for local dev).
  * 2. If local server is off/unreachable (network error), automatically falls back to deployed Vercel backend.
+ * 3. Remembers if local server is unreachable for 60s to prevent stalling future requests.
  */
 export async function fetchWithTimeout(
   url: string,
@@ -53,17 +56,39 @@ export async function fetchWithTimeout(
     return { controller, clear: () => clearTimeout(id) };
   };
 
-  const primaryTimer = createTimer(timeoutMs);
+  const isLocalUrl = url.startsWith(API_BASE_URL) && API_BASE_URL !== VERCEL_API_URL;
+
+  // If local backend was recently unreachable, skip straight to Vercel
+  if (isLocalUrl && Date.now() < localBackendOfflineUntil) {
+    const fallbackUrl = url.replace(API_BASE_URL, VERCEL_API_URL);
+    const timer = createTimer(timeoutMs);
+    try {
+      return await fetch(fallbackUrl, {
+        ...options,
+        signal: timer.controller.signal,
+      });
+    } finally {
+      timer.clear();
+    }
+  }
+
+  // Use a snappy 2s timeout when probing local backend so app never hangs
+  const effectiveTimeout = isLocalUrl ? Math.min(timeoutMs, 2000) : timeoutMs;
+  const primaryTimer = createTimer(effectiveTimeout);
 
   try {
     const response = await fetch(url, {
       ...options,
       signal: primaryTimer.controller.signal,
     });
+    // If local request succeeded, ensure offline flag is cleared
+    if (isLocalUrl) {
+      localBackendOfflineUntil = 0;
+    }
     return response;
   } catch (primaryError) {
-    // If local request failed and the URL starts with our local API_BASE_URL, automatically try Vercel!
-    if (url.startsWith(API_BASE_URL) && API_BASE_URL !== VERCEL_API_URL) {
+    if (isLocalUrl) {
+      localBackendOfflineUntil = Date.now() + 60000; // 60-second cooldown
       const fallbackUrl = url.replace(API_BASE_URL, VERCEL_API_URL);
       console.log(`[API] Local backend unreachable (${url}). Automatically falling back to Vercel: ${fallbackUrl}`);
       

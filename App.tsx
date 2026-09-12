@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, LogBox, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+LogBox.ignoreLogs(['Unable to activate keep awake']);
 import {
   useFonts,
   Nunito_400Regular,
@@ -26,6 +28,7 @@ import { clearFeedCache } from './src/screens/homeowner/ServicesScreen';
 import { clearJobFeedCache } from './src/screens/kasambahay/JobsScreen';
 import { chatStore } from './src/store/chatStore';
 import { BottomTabNavigator, type Role } from './src/navigation/BottomTabNavigator';
+import { preloadPostLoginAssets } from './src/utils/imagePreloader';
 
 // Clean App Navigation Flow matching Figma structure:
 // landing -> login -> user_selection -> registration1-3 -> dashboard (bottom tab navigator)
@@ -84,7 +87,10 @@ export default function App() {
               onLoginPress={() => setFlowState('login')}
               onBackToLanding={() => setFlowState('landing')}
               onLoginSuccess={(token?: string) => {
-                if (token) setAccessToken(token);
+                if (token) {
+                  setAccessToken(token);
+                  preloadPostLoginAssets(token, avatarUri);
+                }
                 setFlowState('dashboard');
               }}
               onSignUp={() => setFlowState('user_selection')}
@@ -115,6 +121,7 @@ export default function App() {
           {/* Step 4: Registration 2 - Take a Selfie / Mandatory Liveness Verification */}
           {flowState === 'registration2' && (
             <RegistrationStep3
+              role={selectedRole}
               token={accessToken}
               onVerified={(result) => {
                 if (result.selfiePath) {

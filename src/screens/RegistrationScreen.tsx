@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Image,
   Pressable,
@@ -11,10 +11,12 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL, fetchWithTimeout } from '../config/api';
+import { updateUserAbout, updateUserTags } from '../api/accountApi';
 import { useUser } from '../context/UserContext';
 import { SearchablePickerModal } from '../ui/SearchablePickerModal';
 import {
@@ -34,6 +36,19 @@ import { RegistrationStepper } from '../components/RegistrationStepper';
 
 const logoSource = require('../../assets/serbisure_new_clean.png');
 
+const KASAMBAHAY_ROLES = [
+  { id: 'Child Care', label: 'Child Care' },
+  { id: 'Senior Care', label: 'Senior Care' },
+  { id: 'Cook', label: 'Cook' },
+  { id: 'Maid', label: 'Maid' },
+  { id: 'Family Driver', label: 'Family Driver' },
+  { id: 'Houseboy', label: 'Houseboy' },
+] as const;
+
+const CIVIL_STATUS_OPTIONS = ['Single', 'Married', 'Widowed', 'Separated'] as const;
+const CHILDREN_OPTIONS = ['No Children', 'With Children'] as const;
+const DIALECT_OPTIONS = ['Bisaya', 'Tagalog', 'English'] as const;
+
 type RegistrationScreenProps = {
   role: 'homeowner' | 'kasambahay';
   onBack?: () => void;
@@ -45,8 +60,10 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
   const insets = useSafeAreaInsets();
   const { updateUser } = useUser();
 
-  // Sub-step inside registration: 1 = Personal Details, 2 = Location & Consent
-  const [subStep, setSubStep] = useState<1 | 2>(1);
+  // Sub-step inside registration:
+  // Kasambahay: 1 = Personal Details, 2 = Kasambahay Profile & Preferences, 3 = Location & Consent
+  // Homeowner: 1 = Personal Details, 3 = Location & Consent
+  const [subStep, setSubStep] = useState<1 | 2 | 3>(1);
 
   // Step 1: Personal & Account info
   const [firstName, setFirstName] = useState('');
@@ -59,7 +76,17 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Step 2: Location & Address info
+  // Step 2 (Kasambahay only): Profile & Preferences (unselected by default)
+  const [age, setAge] = useState('');
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [desiredSalary, setDesiredSalary] = useState('');
+  const [livingArrangement, setLivingArrangement] = useState<'Stay-In' | 'Stay-Out' | null>(null);
+  const [civilStatus, setCivilStatus] = useState<string | null>(null);
+  const [childrenStatus, setChildrenStatus] = useState<string | null>(null);
+  const [selectedDialects, setSelectedDialects] = useState<string[]>([]);
+  const [activePreferencePicker, setActivePreferencePicker] = useState<'civilStatus' | 'children' | null>(null);
+
+  // Step 3: Location & Address info
   const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
   const [selectedProvince, setSelectedProvince] = useState<Province | null>(null);
   const [selectedCity, setSelectedCity] = useState<CityMunicipality | null>(null);
@@ -127,8 +154,67 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
     setRawPhone(digits);
   };
 
+  // --- Step 2 Kasambahay Preference Helpers ---
+  const handleToggleRole = (roleItem: string) => {
+    if (selectedRoles.includes(roleItem)) {
+      setSelectedRoles(selectedRoles.filter((r) => r !== roleItem));
+    } else {
+      if (selectedRoles.length >= 3) {
+        Alert.alert('Role Selection Limit', 'You can select up to 3 roles.');
+        return;
+      }
+      setSelectedRoles([...selectedRoles, roleItem]);
+    }
+  };
+
+  const handleToggleDialect = (dialectItem: string) => {
+    if (selectedDialects.includes(dialectItem)) {
+      setSelectedDialects(selectedDialects.filter((d) => d !== dialectItem));
+    } else {
+      setSelectedDialects([...selectedDialects, dialectItem]);
+    }
+  };
+
+  const computedBio = useMemo(() => {
+    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim() || 'Kasambahay';
+    const ageNum = parseInt(age, 10);
+    const agePart = ageNum ? `, ${ageNum} years old` : '';
+
+    const cityStr = selectedCity?.name;
+    const provStr = selectedProvince?.name;
+    const fromPart = cityStr && provStr ? ` from ${cityStr}, ${provStr}` : '';
+
+    let rolesPart = '';
+    if (selectedRoles.length === 1) {
+      rolesPart = `applying for the role of ${selectedRoles[0]}`;
+    } else if (selectedRoles.length === 2) {
+      rolesPart = `applying for the roles of ${selectedRoles[0]} and ${selectedRoles[1]}`;
+    } else if (selectedRoles.length > 2) {
+      const initial = selectedRoles.slice(0, -1).join(', ');
+      const last = selectedRoles[selectedRoles.length - 1];
+      rolesPart = `applying for the roles of ${initial} and ${last}`;
+    } else {
+      rolesPart = 'applying for household service roles';
+    }
+
+    const salaryNum = parseFloat(desiredSalary.replace(/[^\d.]/g, '')) || 0;
+    const salaryFormatted = salaryNum > 0
+      ? `₱ ${salaryNum.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : '₱ 8,000.00';
+
+    const livingStr = livingArrangement ? livingArrangement.toLowerCase() : 'stay-in';
+
+    return `I am ${fullName}${agePart}${fromPart}, ${rolesPart}. My minimum expected salary is ${salaryFormatted} per month on a ${livingStr} setup.`;
+  }, [firstName, lastName, age, selectedCity, selectedProvince, selectedRoles, desiredSalary, livingArrangement]);
+
+  const finalBio = computedBio;
+
+  const generatedTags = useMemo(() => {
+    return [...selectedRoles, livingArrangement].filter((item): item is string => Boolean(item));
+  }, [selectedRoles, livingArrangement]);
+
   // --- Step 1 Validation & Transition ---
-  const handleProceedToLocation = async () => {
+  const handleProceedFromStep1 = async () => {
     const cleanDigits = rawPhone.replace(/\D/g, '').replace(/^0+/, '');
 
     if (!firstName.trim()) {
@@ -156,12 +242,60 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
       return;
     }
 
-    // Prefetch regions if not already fetched
+    if (isHomeowner) {
+      if (regionsList.length === 0) {
+        loadRegions();
+      }
+      setSubStep(3);
+    } else {
+      setSubStep(2);
+    }
+  };
+
+  // --- Step 2 Validation & Transition ---
+  const handleProceedFromStep2 = () => {
+    if (selectedRoles.length === 0) {
+      Alert.alert("Select Role", "Please select at least one role you can perform (up to 3).");
+      return;
+    }
+    const salaryNum = parseFloat(desiredSalary.replace(/[^\d.]/g, ''));
+    if (!desiredSalary.trim() || isNaN(salaryNum) || salaryNum <= 0) {
+      Alert.alert("Desired Salary", "Please enter your expected minimum monthly salary.");
+      return;
+    }
+    if (salaryNum < 6500) {
+      Alert.alert(
+        "Minimum Monthly Salary",
+        "Under Batas Kasambahay (RA 10361), minimum monthly salary cannot be below ₱6,500/month."
+      );
+      return;
+    }
+    if (!livingArrangement) {
+      Alert.alert("Work Setup", "Please select whether you prefer Stay-In or Stay-Out.");
+      return;
+    }
+    const ageNum = parseInt(age, 10);
+    if (!age.trim() || isNaN(ageNum) || ageNum < 18 || ageNum > 80) {
+      Alert.alert("Invalid Age", "Kasambahay applicants must be at least 18 years old.");
+      return;
+    }
+    if (!civilStatus) {
+      Alert.alert("Civil Status", "Please select your civil status.");
+      return;
+    }
+    if (!childrenStatus) {
+      Alert.alert("Children Status", "Please indicate if you have children or not.");
+      return;
+    }
+    if (selectedDialects.length === 0) {
+      Alert.alert("Spoken Dialect", "Please select at least one spoken dialect.");
+      return;
+    }
+
     if (regionsList.length === 0) {
       loadRegions();
     }
-
-    setSubStep(2);
+    setSubStep(3);
   };
 
   // --- Location Pickers Logic ---
@@ -351,7 +485,10 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
         : `Brgy. ${selectedBarangay.name}`;
       const combinedStreet = `${brgyLabel}, ${streetAddress.trim()}`.slice(0, 100);
 
-      const payload = {
+      const birthYear = new Date().getFullYear() - (parseInt(age, 10) || 22);
+      const approxDob = `${birthYear}-01-01`;
+
+      const payload: any = {
         first_name: firstName.trim(),
         middle_name: middleName.trim(),
         last_name: lastName.trim(),
@@ -365,6 +502,13 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
         street: combinedStreet,
         zipcode: cleanZip,
       };
+
+      if (!isHomeowner) {
+        payload.date_of_birth = approxDob;
+        payload.language = selectedDialects.join(', ');
+        payload.user_about = finalBio;
+        payload.user_tags = generatedTags;
+      }
 
       const generateUUID = () => {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -387,6 +531,8 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
         city: selectedCity.name,
         street: combinedStreet,
         zipcode: cleanZip,
+        userAbout: !isHomeowner ? finalBio : undefined,
+        userTags: !isHomeowner ? generatedTags : undefined,
       });
 
       const response = await fetchWithTimeout(`${API_BASE_URL}/api/v1/accounts/register/`, {
@@ -400,6 +546,10 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
 
       const data = await response.json();
       if (response.ok) {
+        if (!isHomeowner && data.access) {
+          updateUserAbout(data.access, finalBio).catch(() => {});
+          updateUserTags(data.access, generatedTags).catch(() => {});
+        }
         Alert.alert("Success", "Account created successfully!");
         if (onNext) onNext(data.access);
       } else {
@@ -414,7 +564,9 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
   };
 
   const handleHeaderBack = () => {
-    if (subStep === 2) {
+    if (subStep === 3) {
+      setSubStep(isHomeowner ? 1 : 2);
+    } else if (subStep === 2) {
       setSubStep(1);
     } else {
       if (onBack) onBack();
@@ -451,11 +603,26 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
         {/* Form Card */}
         <View style={styles.card}>
           <View style={styles.formContent}>
-            {/* Unified 4-Step Indicator (Current: Step 1 or 2) */}
+            {/* Unified Stepper (4 steps for Homeowner, 5 steps for Kasambahay) */}
             <RegistrationStepper
-              currentStep={subStep}
-              title={subStep === 1 ? 'Step 1: Account Information' : 'Step 2: Where do you live?'}
-              help={subStep === 2 ? 'We use your location to connect you with jobs and household services in your area.' : undefined}
+              currentStep={isHomeowner ? (subStep === 1 ? 1 : 2) : subStep}
+              totalSteps={isHomeowner ? 4 : 5}
+              title={
+                subStep === 1
+                  ? 'Step 1: Account Information'
+                  : subStep === 2
+                  ? 'Step 2: What can you do?'
+                  : isHomeowner
+                  ? 'Step 2: Where do you live?'
+                  : 'Step 3: Where do you live?'
+              }
+              help={
+                subStep === 1
+                  ? undefined
+                  : subStep === 2
+                  ? 'Select up to 3 roles and set your preferences.'
+                  : 'We use your location to connect you with jobs and household services in your area.'
+              }
             />
 
             <ScrollView
@@ -570,8 +737,161 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
                 </View>
               )}
 
-              {/* SUB-STEP 2: LOCATION & CONSENT */}
-              {subStep === 2 && (
+              {/* SUB-STEP 2: KASAMBAHAY PROFILE & PREFERENCES (SINGLE-SCREEN CLEAN ROUNDED UI) */}
+              {subStep === 2 && !isHomeowner && (
+                <View style={styles.compactStep2Wrap}>
+                  {/* Desired Roles (2-Column Grid, No Containers) */}
+                  <View style={styles.step2Block}>
+                    <View style={styles.rolesGrid}>
+                      {KASAMBAHAY_ROLES.map((roleItem) => {
+                        const isSelected = selectedRoles.includes(roleItem.id);
+                        return (
+                          <Pressable
+                            key={roleItem.id}
+                            style={styles.roleGridItem}
+                            onPress={() => handleToggleRole(roleItem.id)}
+                          >
+                            <View style={[styles.compactCheckbox, isSelected && styles.compactCheckboxSelected]}>
+                              {isSelected && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
+                            </View>
+                            <Text
+                              style={[styles.roleGridLabel, isSelected && styles.roleGridLabelSelected]}
+                              numberOfLines={1}
+                            >
+                              {roleItem.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Desired Salary & Work Setup (Side by Side) */}
+                  <View style={styles.compactRow}>
+                    <View style={{ flex: 1.1, marginRight: 10 }}>
+                      <Text style={styles.compactLabel}>Desired Salary</Text>
+                      <View style={styles.compactInputContainer}>
+                        <Text style={styles.compactPesoSymbol}>₱</Text>
+                        <TextInput
+                          style={styles.compactSalaryInput}
+                          placeholder="8,000"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="number-pad"
+                          value={desiredSalary}
+                          onChangeText={(t) => setDesiredSalary(t.replace(/\D/g, ''))}
+                        />
+                        <Text style={styles.compactPerMonthText}>/mo</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ flex: 1.1 }}>
+                      <Text style={styles.compactLabel}>Work Setup</Text>
+                      <View style={styles.setupToggleWrap}>
+                        <Pressable
+                          style={[styles.setupToggleBtn, livingArrangement === 'Stay-In' && styles.setupToggleBtnActive]}
+                          onPress={() => setLivingArrangement((prev) => (prev === 'Stay-In' ? null : 'Stay-In'))}
+                        >
+                          <Text
+                            style={[
+                              styles.setupToggleText,
+                              livingArrangement === 'Stay-In' && styles.setupToggleTextActive,
+                            ]}
+                          >
+                            Stay-In
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.setupToggleBtn, livingArrangement === 'Stay-Out' && styles.setupToggleBtnActive]}
+                          onPress={() => setLivingArrangement((prev) => (prev === 'Stay-Out' ? null : 'Stay-Out'))}
+                        >
+                          <Text
+                            style={[
+                              styles.setupToggleText,
+                              livingArrangement === 'Stay-Out' && styles.setupToggleTextActive,
+                            ]}
+                          >
+                            Stay-Out
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Age, Civil Status & Children (3 in a row) */}
+                  <View style={styles.compactRow}>
+                    <View style={{ width: 66, marginRight: 8 }}>
+                      <Text style={styles.compactLabel}>Age</Text>
+                      <View style={styles.compactInputContainer}>
+                        <TextInput
+                          style={[styles.compactInputText, { textAlign: 'center', paddingHorizontal: 2 }]}
+                          placeholder="Age"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          value={age}
+                          onChangeText={(t) => setAge(t.replace(/\D/g, ''))}
+                        />
+                      </View>
+                    </View>
+
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.compactLabel}>Civil Status</Text>
+                      <Pressable
+                        style={styles.compactDropdownBtn}
+                        onPress={() => setActivePreferencePicker('civilStatus')}
+                      >
+                        <Text
+                          style={[styles.compactDropdownText, !civilStatus && styles.compactPlaceholderText]}
+                          numberOfLines={1}
+                        >
+                          {civilStatus || 'Select'}
+                        </Text>
+                        <Ionicons name="chevron-down" size={13} color="#6B7280" />
+                      </Pressable>
+                    </View>
+
+                    <View style={{ flex: 1.1 }}>
+                      <Text style={styles.compactLabel}>Children</Text>
+                      <Pressable
+                        style={styles.compactDropdownBtn}
+                        onPress={() => setActivePreferencePicker('children')}
+                      >
+                        <Text
+                          style={[styles.compactDropdownText, !childrenStatus && styles.compactPlaceholderText]}
+                          numberOfLines={1}
+                        >
+                          {childrenStatus || 'Select'}
+                        </Text>
+                        <Ionicons name="chevron-down" size={13} color="#6B7280" />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Spoken Dialects */}
+                  <View style={{ marginTop: 14 }}>
+                    <Text style={styles.compactLabel}>Spoken Dialects</Text>
+                    <View style={styles.dialectChipsWrap}>
+                      {DIALECT_OPTIONS.map((d) => {
+                        const isChosen = selectedDialects.includes(d);
+                        return (
+                          <Pressable
+                            key={d}
+                            style={[styles.dialectPill, isChosen && styles.dialectPillActive]}
+                            onPress={() => handleToggleDialect(d)}
+                          >
+                            <Text style={[styles.dialectPillText, isChosen && styles.dialectPillTextActive]}>
+                              {d}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* SUB-STEP 3: LOCATION & CONSENT */}
+              {subStep === 3 && (
                 <View>
                   {/* Region Dropdown Button */}
                   <Pressable style={styles.selectButton} onPress={handleOpenRegionPicker}>
@@ -701,7 +1021,22 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
                   </Pressable>
                   <Pressable
                     style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
-                    onPress={handleProceedToLocation}
+                    onPress={handleProceedFromStep1}
+                  >
+                    <Text style={styles.primaryButtonText}>Next</Text>
+                  </Pressable>
+                </View>
+              ) : subStep === 2 ? (
+                <View style={styles.buttonRow}>
+                  <Pressable
+                    style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+                    onPress={() => setSubStep(1)}
+                  >
+                    <Text style={styles.secondaryButtonText}>Back</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+                    onPress={handleProceedFromStep2}
                   >
                     <Text style={styles.primaryButtonText}>Next</Text>
                   </Pressable>
@@ -710,7 +1045,7 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
                 <View style={styles.buttonRow}>
                   <Pressable
                     style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
-                    onPress={() => setSubStep(1)}
+                    onPress={() => setSubStep(isHomeowner ? 1 : 2)}
                     disabled={loading}
                   >
                     <Text style={styles.secondaryButtonText}>Back</Text>
@@ -776,6 +1111,73 @@ export function RegistrationScreen({ role, onBack, onNext, onCancel }: Registrat
           onSelect={handleSelectBarangay}
           onClose={() => setActivePicker(null)}
         />
+
+        {/* Preference Picker Modal (Civil Status / Children) */}
+        <Modal
+          visible={activePreferencePicker !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setActivePreferencePicker(null)}
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setActivePreferencePicker(null)}
+          >
+            <View style={styles.preferenceModalCard}>
+              <View style={styles.preferenceModalHeader}>
+                <Text style={styles.preferenceModalTitle}>
+                  {activePreferencePicker === 'civilStatus' ? 'Select Civil Status' : 'Children Status'}
+                </Text>
+                <Pressable
+                  onPress={() => setActivePreferencePicker(null)}
+                  hitSlop={10}
+                >
+                  <Ionicons name="close-circle" size={22} color="#9CA3AF" />
+                </Pressable>
+              </View>
+
+              <View style={styles.preferenceOptionList}>
+                {(activePreferencePicker === 'civilStatus' ? CIVIL_STATUS_OPTIONS : CHILDREN_OPTIONS).map(
+                  (opt) => {
+                    const isSelected =
+                      activePreferencePicker === 'civilStatus'
+                        ? civilStatus === opt
+                        : childrenStatus === opt;
+                    return (
+                      <Pressable
+                        key={opt}
+                        style={[
+                          styles.preferenceOptionItem,
+                          isSelected && styles.preferenceOptionItemSelected,
+                        ]}
+                        onPress={() => {
+                          if (activePreferencePicker === 'civilStatus') {
+                            setCivilStatus(opt);
+                          } else {
+                            setChildrenStatus(opt);
+                          }
+                          setActivePreferencePicker(null);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.preferenceOptionText,
+                            isSelected && styles.preferenceOptionTextSelected,
+                          ]}
+                        >
+                          {opt}
+                        </Text>
+                        {isSelected && (
+                          <Ionicons name="checkmark-circle" size={20} color="#111827" />
+                        )}
+                      </Pressable>
+                    );
+                  }
+                )}
+              </View>
+            </View>
+          </Pressable>
+        </Modal>
       </View>
     </KeyboardAvoidingView>
   );
@@ -1021,6 +1423,221 @@ const styles = StyleSheet.create({
     color: THEME.colors.ink,
     fontSize: 14,
     fontFamily: THEME.typography.fontFamily.display,
+    fontWeight: '700',
+  },
+  compactStep2Wrap: {
+    paddingTop: 2,
+  },
+  step2Block: {
+    marginBottom: 10,
+  },
+  compactLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  compactSubLabel: {
+    fontSize: 11.5,
+    fontWeight: '400',
+    color: '#6B7280',
+  },
+  rolesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 10,
+  },
+  roleGridItem: {
+    width: '48.5%',
+    height: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+  },
+  compactCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.6,
+    borderColor: '#9CA3AF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  compactCheckboxSelected: {
+    backgroundColor: '#FFB380',
+    borderColor: '#FFB380',
+  },
+  roleGridLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#374151',
+    flex: 1,
+  },
+  roleGridLabelSelected: {
+    color: '#111827',
+    fontWeight: '700',
+  },
+  compactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  compactInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    height: 44,
+    paddingHorizontal: 12,
+  },
+  compactPesoSymbol: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    marginRight: 4,
+  },
+  compactSalaryInput: {
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#111827',
+    padding: 0,
+    height: '100%',
+  },
+  compactInputText: {
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#111827',
+    padding: 0,
+    height: '100%',
+  },
+  compactPerMonthText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  setupToggleWrap: {
+    flexDirection: 'row',
+    backgroundColor: '#E5E7EB',
+    borderRadius: 12,
+    height: 44,
+    padding: 3,
+  },
+  setupToggleBtn: {
+    flex: 1,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  setupToggleBtnActive: {
+    backgroundColor: '#FFB380',
+  },
+  setupToggleText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  setupToggleTextActive: {
+    color: '#111827',
+    fontWeight: '700',
+  },
+  compactDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    height: 44,
+    paddingHorizontal: 12,
+  },
+  compactDropdownText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#1F2937',
+    flex: 1,
+    marginRight: 4,
+  },
+  compactPlaceholderText: {
+    color: '#9CA3AF',
+  },
+  dialectChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  dialectPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 9999,
+    backgroundColor: '#F3F4F6',
+  },
+  dialectPillActive: {
+    backgroundColor: '#FFB380',
+  },
+  dialectPillText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  dialectPillTextActive: {
+    color: '#111827',
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  preferenceModalCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    maxWidth: 380,
+  },
+  preferenceModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  preferenceModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  preferenceOptionList: {
+    gap: 8,
+  },
+  preferenceOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
+  },
+  preferenceOptionItemSelected: {
+    backgroundColor: '#F3F4F6',
+  },
+  preferenceOptionText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  preferenceOptionTextSelected: {
+    color: '#111827',
     fontWeight: '700',
   },
 });

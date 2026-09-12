@@ -139,8 +139,9 @@ export function DocumentUploadScreen({ role = 'kasambahay', token, onBack, onNex
 
       <View style={styles.card}>
         <RegistrationStepper
-          currentStep={4}
-          title="Step 4: Identity Documents"
+          currentStep={role === 'kasambahay' ? 5 : 4}
+          totalSteps={role === 'kasambahay' ? 5 : 4}
+          title={role === 'kasambahay' ? 'Step 5: Identity Documents' : 'Step 4: Identity Documents'}
           help="Upload your government ID to complete your registration."
         />
 

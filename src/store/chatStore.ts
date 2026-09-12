@@ -1,3 +1,4 @@
+import { Image } from 'react-native';
 import { fetchChatInbox, ConversationPartner } from '../api/chatApi';
 
 export interface ChatConversation {
@@ -17,6 +18,15 @@ type ChatListener = () => void;
 
 export function cleanMessagePreview(text?: string | null): string {
   if (!text) return '';
+  const lower = text.toLowerCase();
+  if (
+    text.startsWith('[BOOKING') ||
+    lower.includes('booking offer') ||
+    lower.includes('booking ready') ||
+    text.includes('📋 Booking')
+  ) {
+    return '📋 Booking Offer';
+  }
   const match = text.match(/^> \[[^\]]+\]:\s*.*?\n\n([\s\S]*)$/);
   if (match && match[1]) {
     return match[1].trim();
@@ -36,11 +46,11 @@ function formatTimestamp(isoString?: string | null): string {
     const diffDays = Math.floor(diffMs / 86400000);
 
     if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays === 1) return 'Yesterday';
+    if (diffMins < 60) return `${diffMins}m`;
+    if (diffHours < 24) return `${diffHours}h`;
+    if (diffDays === 1) return '1d';
     if (diffDays < 7) {
-      return date.toLocaleDateString('en-US', { weekday: 'short' });
+      return `${diffDays}d`;
     }
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   } catch {
@@ -76,11 +86,23 @@ class ChatStore {
     return this.chats.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   }
 
+  private prefetchedAvatars = new Set<string>();
+  private loadInboxPromise: Promise<ChatConversation[]> | null = null;
+
   async loadInbox(token?: string | null): Promise<ChatConversation[]> {
     if (!token) {
       return this.chats;
     }
+    if (this.loadInboxPromise) {
+      return this.loadInboxPromise;
+    }
+    this.loadInboxPromise = this._doLoadInbox(token).finally(() => {
+      this.loadInboxPromise = null;
+    });
+    return this.loadInboxPromise;
+  }
 
+  private async _doLoadInbox(token: string): Promise<ChatConversation[]> {
     try {
       const partners = await fetchChatInbox(token);
       const partnerList: ConversationPartner[] = Array.isArray(partners) ? partners : [];
@@ -99,6 +121,21 @@ class ChatStore {
         unreadCount: p.unread_count || 0,
         sentCount: p.sent_count || 0,
       }));
+
+      // Prefetch any newly discovered partner avatars into memory cache (deduplicated)
+      this.chats.forEach((c) => {
+        if (
+          c.avatar &&
+          typeof c.avatar === 'string' &&
+          c.avatar.startsWith('http') &&
+          !this.prefetchedAvatars.has(c.avatar)
+        ) {
+          this.prefetchedAvatars.add(c.avatar);
+          Image.prefetch(c.avatar).catch(() => {
+            this.prefetchedAvatars.delete(c.avatar);
+          });
+        }
+      });
 
       this.isLoaded = true;
       this.notify();
@@ -135,6 +172,10 @@ class ChatStore {
       unreadCount: chat.unreadCount ?? 0,
       sentCount: chat.sentCount ?? (existingIndex >= 0 ? this.chats[existingIndex]?.sentCount : 0) ?? 0,
     };
+
+    if (updatedItem.avatar && updatedItem.avatar.startsWith('http')) {
+      Image.prefetch(updatedItem.avatar).catch(() => {});
+    }
 
     if (existingIndex >= 0) {
       this.chats[existingIndex] = { ...this.chats[existingIndex], ...updatedItem, time: 'Just now' };

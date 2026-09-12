@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL, fetchWithTimeout } from '../../config/api';
+import THEME from '../../config/theme';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
 
@@ -41,17 +42,13 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
 
   // Form State
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  const [engagementType, setEngagementType] = useState<'short' | 'long'>('short');
-  const defaultDate = new Date();
-  defaultDate.setDate(defaultDate.getDate() + 1); // Default to tomorrow
-  const [viewDate, setViewDate] = useState<Date>(new Date(defaultDate.getFullYear(), defaultDate.getMonth(), 1));
-  const [selectedDate, setSelectedDate] = useState<Date>(defaultDate);
-  const [selectedTime, setSelectedTime] = useState<'morning' | 'afternoon' | 'night'>('afternoon');
+  const [engagementType, setEngagementType] = useState<'short' | 'long' | null>(null);
+  const [setupPreference, setSetupPreference] = useState<'stay-out' | 'stay-in' | null>(null);
+  const [selectedTime, setSelectedTime] = useState<'morning' | 'afternoon' | 'night' | null>(null);
   const [address, setAddress] = useState('');
   const [floorUnit, setFloorUnit] = useState('');
-  const [zipCode, setZipCode] = useState('');
   const [instructions, setInstructions] = useState('');
-  const [offerAmount, setOfferAmount] = useState('1500');
+  const [offerAmount, setOfferAmount] = useState('800');
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [postedSuccess, setPostedSuccess] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
@@ -90,68 +87,6 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
     outputRange: ['0deg', '360deg'],
   });
 
-  const handlePrevMonth = () => {
-    setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-  };
-
-  const handleNextMonth = () => {
-    setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-  };
-
-  const getCalendarDays = () => {
-    const year = viewDate.getFullYear();
-    const month = viewDate.getMonth();
-
-    const firstDayIndex = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const daysInPrevMonth = new Date(year, month, 0).getDate();
-
-    const days: Array<{
-      date: Date;
-      dayNum: number;
-      isCurrentMonth: boolean;
-    }> = [];
-
-    for (let i = firstDayIndex - 1; i >= 0; i--) {
-      const prevDate = new Date(year, month - 1, daysInPrevMonth - i);
-      days.push({
-        date: prevDate,
-        dayNum: prevDate.getDate(),
-        isCurrentMonth: false,
-      });
-    }
-
-    for (let d = 1; d <= daysInMonth; d++) {
-      const currDate = new Date(year, month, d);
-      days.push({
-        date: currDate,
-        dayNum: d,
-        isCurrentMonth: true,
-      });
-    }
-
-    const totalCells = days.length > 35 ? 42 : 35;
-    const remaining = totalCells - days.length;
-    for (let n = 1; n <= remaining; n++) {
-      const nextDate = new Date(year, month + 1, n);
-      days.push({
-        date: nextDate,
-        dayNum: n,
-        isCurrentMonth: false,
-      });
-    }
-
-    return days;
-  };
-
-  const formatSelectedDate = (date: Date) => {
-    const monthNames = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return `${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-  };
-
   const services = [
     { id: 'Cleaning', label: 'Cleaning', icon: 'sparkles' },
     { id: 'Child_care', label: 'Child Care', icon: 'happy' },
@@ -164,13 +99,13 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
   const resetForm = () => {
     setStep(1);
     setSelectedServices([]);
-    setEngagementType('short');
-    setSelectedTime('afternoon');
+    setEngagementType(null);
+    setSetupPreference(null);
+    setSelectedTime(null);
     setAddress('');
     setFloorUnit('');
-    setZipCode('');
     setInstructions('');
-    setOfferAmount('1500');
+    setOfferAmount('800');
     setAgreedTerms(false);
   };
 
@@ -179,38 +114,133 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
     onClose();
   };
 
+  const handleEngagementChange = (type: 'short' | 'long') => {
+    setEngagementType(type);
+    if (type === 'long') {
+      if (offerAmount === '800' || offerAmount === '1500') {
+        setOfferAmount('8000');
+      }
+    } else {
+      if (offerAmount === '8000') {
+        setOfferAmount('800');
+      }
+    }
+  };
+
+  // Construct emphasized auto-message
+  const getSelectedRoleLabel = () => {
+    if (selectedServices.length === 0) return 'Household Help';
+    return selectedServices
+      .map((s) => services.find((x) => x.id === s)?.label || s.replace(/_/g, ' '))
+      .join(' & ');
+  };
+
+  const getTimeLabel = () => {
+    if (selectedTime === 'morning') return 'morning (8 AM - 12 PM)';
+    if (selectedTime === 'afternoon') return 'afternoon (12 PM - 5 PM)';
+    if (selectedTime === 'night') return 'night (5 PM - 9 PM)';
+    return 'flexible hours';
+  };
+
+  const buildAutoMessage = () => {
+    const roleText = getSelectedRoleLabel();
+    const locText = address.trim() || 'my location';
+    const setupText = setupPreference === 'stay-in' ? 'stay-in' : 'stay-out';
+
+    let msg = '';
+    if (engagementType === 'short') {
+      msg = `I am looking for ${roleText} at ${locText}, capable of working on ${getTimeLabel()} on a ${setupText} setup.`;
+    } else {
+      // Long-term: no preferred time because it is standard ~8 hours a day
+      msg = `I am looking for ${roleText} at ${locText}, capable of working on a ${setupText} setup.`;
+    }
+
+    if (instructions.trim()) {
+      msg += `\n\nSpecific instructions:\n${instructions.trim()}`;
+    }
+
+    return msg;
+  };
+
   const handleNext = async () => {
-    if (step < 4) {
-      if (step === 1 && selectedServices.length === 0) {
-        Alert.alert('Selection Required', 'Please choose at least one service to continue.');
+    if (step === 1) {
+      if (selectedServices.length === 0) {
+        Alert.alert('Selection Required', 'Please choose at least one service role to continue.');
         return;
       }
-      setStep((prev) => (prev + 1) as 1 | 2 | 3 | 4);
+      setStep(2);
+    } else if (step === 2) {
+      if (!engagementType) {
+        Alert.alert('Selection Required', 'Please select an engagement type (Short-term or Long-term).');
+        return;
+      }
+      if (!setupPreference) {
+        Alert.alert('Selection Required', 'Please select your work setup preference (Stay-out or Stay-in).');
+        return;
+      }
+      if (engagementType === 'short' && !selectedTime) {
+        Alert.alert('Selection Required', 'Please select what time works best for you.');
+        return;
+      }
+      setStep(3);
+    } else if (step === 3) {
+      if (!address.trim()) {
+        Alert.alert('Address Required', 'Please enter your street, barangay, or city location.');
+        return;
+      }
+      const amount = Number(offerAmount.replace(/[^0-9.]/g, ''));
+      if (!offerAmount.trim() || isNaN(amount) || amount <= 0) {
+        Alert.alert('Valid Rate Required', 'Please provide a valid offer amount.');
+        return;
+      }
+      if (engagementType === 'short' && amount < 600) {
+        Alert.alert(
+          'Minimum Daily Rate',
+          'The rate cannot be below ₱600/day on a short-term basis.'
+        );
+        return;
+      }
+      if (engagementType === 'long' && amount < 6500) {
+        Alert.alert(
+          'Minimum Monthly Salary',
+          'Under Batas Kasambahay (RA 10361), monthly salary cannot be below ₱6,500/month.'
+        );
+        return;
+      }
+      setStep(4);
     } else {
       if (!agreedTerms) {
         Alert.alert('Terms Required', 'Please agree to the Terms of Service to post.');
         return;
       }
-      
+
       setIsPosting(true);
-      
+
       try {
-        const startTime = new Date(selectedDate);
+        const autoMessage = buildAutoMessage();
+
+        const now = new Date();
+        const startTime = new Date(now);
+        startTime.setDate(startTime.getDate() + 1);
         startTime.setHours(selectedTime === 'morning' ? 8 : selectedTime === 'afternoon' ? 12 : 17, 0, 0, 0);
 
-        const endTime = new Date(selectedDate);
-        endTime.setHours(selectedTime === 'morning' ? 12 : selectedTime === 'afternoon' ? 17 : 21, 0, 0, 0);
+        const endTime = new Date(startTime);
+        if (engagementType === 'long') {
+          endTime.setDate(endTime.getDate() + 30);
+        } else {
+          endTime.setHours(selectedTime === 'morning' ? 12 : selectedTime === 'afternoon' ? 17 : 21, 0, 0, 0);
+        }
 
         const payload = {
           booking_type: engagementType === 'short' ? 'short_term' : 'long_term',
           service_category: selectedServices,
           start_time: startTime.toISOString(),
           end_time: endTime.toISOString(),
-          service_address: address,
-          floor_number: floorUnit || undefined,
-          zip_code: zipCode,
-          special_instruction: instructions || undefined,
-          daily_rate: offerAmount
+          service_address: address.trim(),
+          floor_number: floorUnit.trim() || undefined,
+          zip_code: '9000',
+          special_instruction: autoMessage,
+          daily_rate: offerAmount.trim(),
         };
 
         const response = await fetchWithTimeout(`${API_BASE_URL}/api/v1/booking/post/`, {
@@ -218,9 +248,9 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
           headers: {
             'Content-Type': 'application/json',
             'Authorization': token ? `Bearer ${token}` : '',
-            'Idempotency-Key': generateUUIDv4()
+            'Idempotency-Key': generateUUIDv4(),
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -294,22 +324,22 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
           <View style={styles.titleBlock}>
             {step === 1 && (
               <Text style={styles.mainTitle}>
-                What <Text style={styles.titleHighlight}>service</Text> do you need today?
+                What <Text style={styles.titleHighlight}>role</Text> do you need?
               </Text>
             )}
             {step === 2 && (
               <Text style={styles.mainTitle}>
-                When do you <Text style={styles.titleHighlight}>need</Text> the service?
+                Job type & <Text style={styles.titleHighlight}>setup</Text>
               </Text>
             )}
             {step === 3 && (
               <Text style={styles.mainTitle}>
-                Job <Text style={styles.titleHighlight}>details</Text>
+                Location & <Text style={styles.titleHighlight}>offer rate</Text>
               </Text>
             )}
             {step === 4 && (
               <Text style={styles.mainTitle}>
-                Review & <Text style={styles.titleHighlight}>submit</Text>
+                Review your <Text style={styles.titleHighlight}>job post</Text>
               </Text>
             )}
           </View>
@@ -326,23 +356,9 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
               <View style={styles.serviceGrid}>
                 {services.map((item) => {
                   const isSelected = selectedServices.includes(item.id);
-                  
+
                   const handleToggle = () => {
-                    setSelectedServices(prev => {
-                      if (item.id === 'All-around') return ['All-around'];
-                      
-                      let updated = prev.includes(item.id) 
-                        ? prev.filter(s => s !== item.id) 
-                        : [...prev, item.id];
-                        
-                      updated = updated.filter(s => s !== 'All-around');
-                      
-                      const coreServices = ['Cleaning', 'Child_care', 'Cooking', 'Caregiver', 'Laundry'];
-                      const hasAllCore = coreServices.every(s => updated.includes(s));
-                      
-                      if (hasAllCore) return ['All-around'];
-                      return updated;
-                    });
+                    setSelectedServices([item.id]);
                   };
 
                   return (
@@ -366,14 +382,15 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
               </View>
             )}
 
-            {/* STEP 2: SCHEDULE & TIME */}
+            {/* STEP 2: ARRANGEMENT & SETUP */}
             {step === 2 && (
               <View style={styles.step2Container}>
-                {/* Short-term / Long-term Toggle */}
+                {/* 1. Engagement Type: Short-term vs Long-term */}
+                <Text style={styles.sectionLabel}>ENGAGEMENT TYPE</Text>
                 <View style={styles.typeToggleRow}>
                   <Pressable
                     style={[styles.typeCard, engagementType === 'short' && styles.typeCardActive]}
-                    onPress={() => setEngagementType('short')}
+                    onPress={() => handleEngagementChange('short')}
                   >
                     <Ionicons
                       name="time"
@@ -382,12 +399,11 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
                       style={styles.typeIcon}
                     />
                     <Text style={styles.typeTitle}>Short-term</Text>
-                    <Text style={styles.typeSub}>Single visit or quick shift</Text>
                   </Pressable>
 
                   <Pressable
                     style={[styles.typeCard, engagementType === 'long' && styles.typeCardActive]}
-                    onPress={() => setEngagementType('long')}
+                    onPress={() => handleEngagementChange('long')}
                   >
                     <Ionicons
                       name="calendar"
@@ -396,212 +412,226 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
                       style={styles.typeIcon}
                     />
                     <Text style={styles.typeTitle}>Long-term</Text>
-                    <Text style={styles.typeSub}>Weekly or monthly routine</Text>
                   </Pressable>
                 </View>
 
-                {/* Calendar Card */}
-                <View style={styles.calendarCard}>
-                  <View style={styles.calendarHeader}>
-                    <Text style={styles.calendarMonth}>
-                      {viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                    </Text>
-                    <View style={styles.calendarArrows}>
-                      <Pressable onPress={handlePrevMonth} style={styles.calendarArrowBtn} hitSlop={10}>
-                        <Ionicons name="chevron-back" size={16} color="#0D0D11" />
+                {/* 2. Setup Preference: Stay-in vs Stay-out */}
+                <Text style={[styles.sectionLabel, { marginTop: 14 }]}>WORK SETUP PREFERENCE</Text>
+                <View style={styles.typeToggleRow}>
+                  <Pressable
+                    style={[styles.typeCard, setupPreference === 'stay-out' && styles.typeCardActive]}
+                    onPress={() => setSetupPreference('stay-out')}
+                  >
+                    <Ionicons
+                      name="walk"
+                      size={24}
+                      color={setupPreference === 'stay-out' ? '#0D0D11' : '#FFB380'}
+                      style={styles.typeIcon}
+                    />
+                    <Text style={styles.typeTitle}>Stay-out</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.typeCard, setupPreference === 'stay-in' && styles.typeCardActive]}
+                    onPress={() => setSetupPreference('stay-in')}
+                  >
+                    <Ionicons
+                      name="home"
+                      size={24}
+                      color={setupPreference === 'stay-in' ? '#0D0D11' : '#FFB380'}
+                      style={styles.typeIcon}
+                    />
+                    <Text style={styles.typeTitle}>Stay-in</Text>
+                  </Pressable>
+                </View>
+
+                {/* 3. Preferred Time (ONLY for Short-term) */}
+                {engagementType === 'short' ? (
+                  <View style={{ marginTop: 14 }}>
+                    <Text style={styles.sectionLabel}>WHAT TIME WORKS BEST?</Text>
+                    <View style={styles.timeSlotRow}>
+                      <Pressable
+                        style={[styles.timeSlotCard, selectedTime === 'morning' && styles.timeSlotActive]}
+                        onPress={() => setSelectedTime('morning')}
+                      >
+                        <Ionicons name="sunny" size={20} color={selectedTime === 'morning' ? '#0D0D11' : '#FFB380'} />
+                        <Text style={styles.timeSlotTitle}>Morning</Text>
+                        <Text style={styles.timeSlotSub}>8 AM - 12 PM</Text>
                       </Pressable>
-                      <Pressable onPress={handleNextMonth} style={styles.calendarArrowBtn} hitSlop={10}>
-                        <Ionicons name="chevron-forward" size={16} color="#0D0D11" />
+
+                      <Pressable
+                        style={[styles.timeSlotCard, selectedTime === 'afternoon' && styles.timeSlotActive]}
+                        onPress={() => setSelectedTime('afternoon')}
+                      >
+                        <Ionicons name="partly-sunny" size={20} color={selectedTime === 'afternoon' ? '#0D0D11' : '#FFB380'} />
+                        <Text style={styles.timeSlotTitle}>Afternoon</Text>
+                        <Text style={styles.timeSlotSub}>12 PM - 5 PM</Text>
+                      </Pressable>
+
+                      <Pressable
+                        style={[styles.timeSlotCard, selectedTime === 'night' && styles.timeSlotActive]}
+                        onPress={() => setSelectedTime('night')}
+                      >
+                        <Ionicons name="moon" size={20} color={selectedTime === 'night' ? '#0D0D11' : '#FFB380'} />
+                        <Text style={styles.timeSlotTitle}>Night</Text>
+                        <Text style={styles.timeSlotSub}>5 PM - 9 PM</Text>
                       </Pressable>
                     </View>
                   </View>
-
-                  <View style={styles.daysHeader}>
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                      <Text key={d} style={styles.dayHeaderText}>
-                        {d}
-                      </Text>
-                    ))}
+                ) : engagementType === 'long' ? (
+                  <View style={styles.longTermScheduleCard}>
+                    <Ionicons name="time-outline" size={20} color="#0D0D11" style={{ marginRight: 10, marginTop: 1 }} />
+                    <Text style={styles.longTermScheduleText}>
+                      Long-term employment follows a standard domestic schedule (approx. 8 hours/day with 1 rest day per week).
+                    </Text>
                   </View>
-
-                  <View style={styles.datesGrid}>
-                    {getCalendarDays().map((item, idx) => {
-                      const isSelected =
-                        selectedDate.getFullYear() === item.date.getFullYear() &&
-                        selectedDate.getMonth() === item.date.getMonth() &&
-                        selectedDate.getDate() === item.date.getDate();
-
-                      return (
-                        <View key={idx} style={styles.dateCellWrapper}>
-                          <Pressable
-                            style={[
-                              styles.dateCell,
-                              isSelected && styles.dateCellSelected,
-                            ]}
-                            onPress={() => {
-                              setSelectedDate(item.date);
-                              if (!item.isCurrentMonth) {
-                                setViewDate(new Date(item.date.getFullYear(), item.date.getMonth(), 1));
-                              }
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.dateCellText,
-                                !item.isCurrentMonth && styles.dateCellMuted,
-                                isSelected && styles.dateCellTextSelected,
-                              ]}
-                            >
-                              {item.dayNum}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                {/* Time Selection */}
-                <Text style={styles.sectionLabel}>WHAT TIME WORKS BEST?</Text>
-                <View style={styles.timeSlotRow}>
-                  <Pressable
-                    style={[styles.timeSlotCard, selectedTime === 'morning' && styles.timeSlotActive]}
-                    onPress={() => setSelectedTime('morning')}
-                  >
-                    <Ionicons name="sunny" size={20} color={selectedTime === 'morning' ? '#0D0D11' : '#FFB380'} />
-                    <Text style={styles.timeSlotTitle}>Morning</Text>
-                    <Text style={styles.timeSlotSub}>8 AM - 12 PM</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={[styles.timeSlotCard, selectedTime === 'afternoon' && styles.timeSlotActive]}
-                    onPress={() => setSelectedTime('afternoon')}
-                  >
-                    <Ionicons name="partly-sunny" size={20} color={selectedTime === 'afternoon' ? '#0D0D11' : '#FFB380'} />
-                    <Text style={styles.timeSlotTitle}>Afternoon</Text>
-                    <Text style={styles.timeSlotSub}>12 PM - 5 PM</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={[styles.timeSlotCard, selectedTime === 'night' && styles.timeSlotActive]}
-                    onPress={() => setSelectedTime('night')}
-                  >
-                    <Ionicons name="moon" size={20} color={selectedTime === 'night' ? '#0D0D11' : '#FFB380'} />
-                    <Text style={styles.timeSlotTitle}>Night</Text>
-                    <Text style={styles.timeSlotSub}>5 PM - 9 PM</Text>
-                  </Pressable>
-                </View>
+                ) : null}
               </View>
             )}
 
-            {/* STEP 3: DETAILS & RATE */}
+            {/* STEP 3: DETAILS, INSTRUCTIONS & RATE */}
             {step === 3 && (
               <View style={styles.step3Container}>
                 <Text style={styles.inputGroupLabel}>JOB ADDRESS</Text>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Street, barangay, or city"
+                  placeholder="Street, barangay, or city (e.g. Zone 6 Cugman)"
                   placeholderTextColor="#9CA3AF"
                   value={address}
                   onChangeText={setAddress}
                 />
 
-                <View style={styles.twoColumnRow}>
-                  <View style={{ flex: 1, marginRight: 8 }}>
-                    <Text style={styles.inputGroupLabel}>FLOOR / UNIT (OPTIONAL)</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="e.g. Unit 4B"
-                      placeholderTextColor="#9CA3AF"
-                      value={floorUnit}
-                      onChangeText={setFloorUnit}
-                    />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 8 }}>
-                    <Text style={styles.inputGroupLabel}>ZIP CODE</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="e.g. 6000"
-                      placeholderTextColor="#9CA3AF"
-                      value={zipCode}
-                      onChangeText={setZipCode}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
+                <Text style={styles.inputGroupLabel}>FLOOR / UNIT (OPTIONAL)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g. Unit 4B"
+                  placeholderTextColor="#9CA3AF"
+                  value={floorUnit}
+                  onChangeText={setFloorUnit}
+                />
 
-                <Text style={styles.inputGroupLabel}>SPECIFIC INSTRUCTIONS</Text>
+                <Text style={styles.inputGroupLabel}>SPECIFIC INSTRUCTIONS ABOUT ROLE (OPTIONAL)</Text>
                 <TextInput
                   style={styles.multilineInput}
                   multiline
                   numberOfLines={4}
-                  placeholder="e.g. 'Must be comfortable with large dogs' or 'Doorbell broken, please knock'."
+                  placeholder="e.g. Must be comfortable with large dogs, gentle with infants, or experienced with laundry care."
                   placeholderTextColor="#9CA3AF"
                   value={instructions}
                   onChangeText={setInstructions}
                 />
 
-                <Text style={styles.inputGroupLabel}>OFFER AMOUNT (PHP)</Text>
-                <View style={styles.offerInputWrapper}>
-                  <Text style={styles.currencyPrefix}>₱</Text>
-                  <TextInput
-                    style={styles.offerInput}
-                    value={offerAmount}
-                    onChangeText={setOfferAmount}
-                    keyboardType="numeric"
-                  />
-                </View>
+                <Text style={styles.inputGroupLabel}>
+                  {engagementType === 'short' ? 'OFFER AMOUNT (PER DAY)' : 'MONTHLY SALARY OFFER'}
+                </Text>
+                {(() => {
+                  const num = Number(offerAmount.replace(/[^0-9.]/g, ''));
+                  const isBelowMin = offerAmount.trim().length > 0 && (engagementType === 'short' ? num < 600 : num < 6500);
+                  return (
+                    <>
+                      <View style={[styles.offerInputWrapper, isBelowMin && styles.offerInputWrapperInvalid]}>
+                        <Text style={[styles.currencyPrefix, isBelowMin && { color: '#DC2626' }]}>₱</Text>
+                        <TextInput
+                          style={[styles.offerInput, isBelowMin && { color: '#DC2626' }]}
+                          value={offerAmount}
+                          onChangeText={setOfferAmount}
+                          keyboardType="numeric"
+                          placeholder={engagementType === 'short' ? '600' : '6500'}
+                          placeholderTextColor={isBelowMin ? '#FCA5A5' : '#9CA3AF'}
+                        />
+                        <Text style={[styles.rateUnitSuffix, isBelowMin && { color: '#DC2626' }]}>
+                          {engagementType === 'short' ? '/day' : '/month'}
+                        </Text>
+                      </View>
+                      {isBelowMin ? (
+                        <Text style={styles.invalidRateHint}>
+                          {engagementType === 'short'
+                            ? 'Minimum rate is ₱600 / day'
+                            : 'Minimum salary is ₱6,500 / month'}
+                        </Text>
+                      ) : null}
+                    </>
+                  );
+                })()}
 
                 <View style={styles.recommendBox}>
                   <Text style={styles.recommendTitle}>
-                    Suggested range for {selectedServices.length > 0 ? (services.find(x => x.id === selectedServices[0])?.label || selectedServices[0]) : 'Home Service'}: <Text style={{ fontWeight: '800' }}>₱800 - ₱1500 / day</Text>
+                    {engagementType === 'short'
+                      ? `Suggested rate for ${getSelectedRoleLabel()}: `
+                      : `Standard monthly rate for ${getSelectedRoleLabel()}: `}
+                    <Text style={{ fontFamily: THEME.typography.fontFamily.mainExtraBold, fontWeight: '800', color: '#0D0D11' }}>
+                      {engagementType === 'short' ? '₱600 - ₱1,500 / day' : '₱6,500 - ₱15,000 / month'}
+                    </Text>
                   </Text>
                   <Text style={styles.recommendSub}>
-                    Based on standard rates for professional domestic services in your area.
+                    {engagementType === 'short'
+                      ? 'Fair compensation based on daily task difficulty and hours (minimum ₱600/day).'
+                      : 'Complies with RTWPB Batas Kasambahay statutory regional wage standards (minimum ₱6,500/month).'}
                   </Text>
                 </View>
               </View>
             )}
 
-            {/* STEP 4: SUMMARY & SUBMISSION */}
+            {/* STEP 4: EMPHASIZED MESSAGE PREVIEW & SUMMARY */}
             {step === 4 && (
               <View style={styles.step4Container}>
-                <Text style={styles.inputGroupLabel}>SUMMARY</Text>
+                {/* Emphasized Listing Preview */}
+                <Text style={styles.inputGroupLabel}>LISTING PREVIEW</Text>
+                <View style={styles.autoMessageCard}>
+                  <View style={styles.autoMessageHeader}>
+                    <Ionicons name="chatbox-ellipses" size={18} color="#F97316" />
+                    <Text style={styles.autoMessageTitle}>Listing Preview</Text>
+                  </View>
+                  <Text style={styles.autoMessageQuote}>
+                    "{buildAutoMessage()}"
+                  </Text>
+                </View>
+
+                {/* Clean Summary Table */}
+                <Text style={[styles.inputGroupLabel, { marginTop: 14 }]}>SUMMARY</Text>
                 <View style={styles.summaryCard}>
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Service</Text>
+                    <Text style={styles.summaryLabel}>Role</Text>
                     <Text style={[styles.summaryValue, { flex: 1, textAlign: 'right', marginLeft: 16 }]}>
-                      {selectedServices.length > 0 
-                        ? selectedServices.map(s => services.find(x => x.id === s)?.label || s).join(', ')
-                        : 'None'}
+                      {getSelectedRoleLabel()}
                     </Text>
                   </View>
                   <View style={styles.summaryDivider} />
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Type</Text>
                     <Text style={styles.summaryValue}>
-                      {engagementType === 'short' ? 'Short-term' : 'Long-term'}
+                      {engagementType === 'short' ? 'Part-time (Short-term)' : 'Long-term'}
                     </Text>
                   </View>
                   <View style={styles.summaryDivider} />
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Date</Text>
-                    <Text style={styles.summaryValue}>{formatSelectedDate(selectedDate)}</Text>
+                    <Text style={styles.summaryLabel}>Setup</Text>
+                    <Text style={styles.summaryValue}>
+                      {setupPreference === 'stay-in' ? 'Stay-in' : 'Stay-out'}
+                    </Text>
                   </View>
                   <View style={styles.summaryDivider} />
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Offer Rate</Text>
                     <Text style={[styles.summaryValue, { color: '#D97706', fontWeight: '800' }]}>
-                      ₱{offerAmount} / day
+                      ₱{offerAmount} {engagementType === 'short' ? '/ day' : '/ month'}
                     </Text>
                   </View>
-                  <View style={styles.summaryDivider} />
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Preferred Time</Text>
-                    <Text style={styles.summaryValue}>
-                      {selectedTime === 'morning' ? '8:00 AM - 12:00 PM' : selectedTime === 'afternoon' ? '12:00 PM - 5:00 PM' : '5:00 PM - 9:00 PM'}
-                    </Text>
-                  </View>
+                  {engagementType === 'short' && (
+                    <>
+                      <View style={styles.summaryDivider} />
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Time</Text>
+                        <Text style={styles.summaryValue}>
+                          {selectedTime === 'morning'
+                            ? 'Morning (8 AM - 12 PM)'
+                            : selectedTime === 'afternoon'
+                            ? 'Afternoon (12 PM - 5 PM)'
+                            : 'Night (5 PM - 9 PM)'}
+                        </Text>
+                      </View>
+                    </>
+                  )}
                   <View style={styles.summaryDivider} />
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Location</Text>
@@ -614,7 +644,7 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
                 <View style={styles.visibleNoticeBox}>
                   <Ionicons name="shield-checkmark" size={16} color="#065F46" style={{ marginRight: 8, marginTop: 1 }} />
                   <Text style={styles.visibleNoticeText}>
-                    Your job listing will be visible to verified Kasambahay in your area once posted.
+                    Your listing will be visible to verified Kasambahays in your area immediately once posted.
                   </Text>
                 </View>
 
@@ -623,10 +653,10 @@ export function PostJobScreen({ visible, onClose, role = 'Homeowner', token }: P
                   onPress={() => setAgreedTerms(!agreedTerms)}
                 >
                   <View style={[styles.checkbox, agreedTerms && styles.checkboxActive]}>
-                    {agreedTerms && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                    {agreedTerms && <Ionicons name="checkmark" size={16} color="#0D0D11" />}
                   </View>
                   <Text style={styles.checkboxText}>
-                    I agree to the <Text style={{ color: '#0D0D11', fontWeight: '700' }}>SerbiSure Terms of Service</Text> and understand that payment is released once the job is confirmed and completed.
+                    I agree to the <Text style={{ color: '#0D0D11', fontWeight: '700' }}>SerbiSure Terms of Service</Text> and confirm these household details are accurate.
                   </Text>
                 </Pressable>
               </View>
@@ -698,6 +728,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
+    fontFamily: THEME.typography.fontFamily.mainExtraBold,
     fontSize: 18,
     fontWeight: '800',
     color: '#0D0D11',
@@ -715,6 +746,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   stepBadgeText: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 11.5,
     fontWeight: '800',
     color: '#9CA3AF',
@@ -725,6 +757,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   mainTitle: {
+    fontFamily: THEME.typography.fontFamily.mainBlack,
     fontSize: 22,
     fontWeight: '900',
     color: '#0D0D11',
@@ -756,28 +789,19 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   serviceCardActive: {
-    backgroundColor: '#FFF4ED',
-  },
-  cardCheckBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
     backgroundColor: '#FFB380',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   serviceIcon: {
     marginBottom: 12,
   },
   serviceLabel: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 13.5,
     fontWeight: '700',
     color: '#0D0D11',
   },
   serviceLabelActive: {
+    fontFamily: THEME.typography.fontFamily.mainExtraBold,
     color: '#0D0D11',
     fontWeight: '800',
   },
@@ -786,114 +810,37 @@ const styles = StyleSheet.create({
   step2Container: {
     width: '100%',
   },
-  typeToggleRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  typeCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 14,
-    alignItems: 'flex-start',
-  },
-  typeCardActive: {
-    backgroundColor: '#FFF4ED',
-  },
-  typeIcon: {
-    marginBottom: 10,
-  },
-  typeTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: '#0D0D11',
-    marginBottom: 2,
-  },
-  typeSub: {
-    fontSize: 10.5,
-    color: '#6B7280',
-    lineHeight: 14,
-  },
-  calendarCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 16,
-    marginBottom: 14,
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  calendarMonth: {
-    fontSize: 14.5,
-    fontWeight: '800',
-    color: '#0D0D11',
-  },
-  calendarArrows: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  calendarArrowBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F9FAFB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  daysHeader: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  dayHeaderText: {
-    width: '14.28%',
-    textAlign: 'center',
-    fontSize: 10.5,
-    color: '#9CA3AF',
-    fontWeight: '700',
-  },
-  datesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dateCellWrapper: {
-    width: '14.28%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 2,
-  },
-  dateCell: {
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 15,
-  },
-  dateCellSelected: {
-    backgroundColor: '#0D0D11',
-  },
-  dateCellText: {
-    fontSize: 11,
-    color: '#0D0D11',
-    fontWeight: '600',
-  },
-  dateCellMuted: {
-    color: '#D1D5DB',
-  },
-  dateCellTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
   sectionLabel: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 11,
     fontWeight: '800',
     color: '#9CA3AF',
     letterSpacing: 0.8,
     marginBottom: 8,
+  },
+  typeToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  typeCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    alignItems: 'flex-start',
+  },
+  typeCardActive: {
+    backgroundColor: '#FFB380',
+  },
+  typeIcon: {
+    marginBottom: 10,
+  },
+  typeTitle: {
+    fontFamily: THEME.typography.fontFamily.mainExtraBold,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0D0D11',
   },
   timeSlotRow: {
     flexDirection: 'row',
@@ -907,18 +854,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timeSlotActive: {
-    backgroundColor: '#FFF4ED',
+    backgroundColor: '#FFB380',
   },
   timeSlotTitle: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 12,
     fontWeight: '700',
     color: '#0D0D11',
     marginTop: 4,
   },
   timeSlotSub: {
+    fontFamily: THEME.typography.fontFamily.secondaryMedium,
     fontSize: 9.5,
     color: '#6B7280',
     marginTop: 1,
+  },
+  longTermScheduleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF4ED',
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#0D0D11',
+    padding: 14,
+    marginTop: 14,
+  },
+  longTermScheduleText: {
+    flex: 1,
+    fontFamily: THEME.typography.fontFamily.secondaryMedium,
+    fontSize: 12,
+    color: '#0D0D11',
+    fontWeight: '600',
+    lineHeight: 17,
   },
 
   // STEP 3 STYLES
@@ -942,13 +909,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
   },
-  twoColumnRow: {
-    flexDirection: 'row',
-  },
   multilineInput: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    height: 85,
+    height: 90,
     padding: 14,
     fontSize: 12.5,
     color: '#0D0D11',
@@ -963,12 +927,26 @@ const styles = StyleSheet.create({
     height: 48,
     paddingHorizontal: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  offerInputWrapperInvalid: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  invalidRateHint: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+    marginTop: -8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   currencyPrefix: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0D0D11',
-    marginRight: 8,
+    marginRight: 6,
   },
   offerInput: {
     flex: 1,
@@ -976,30 +954,68 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0D0D11',
   },
+  rateUnitSuffix: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9CA3AF',
+  },
   recommendBox: {
     backgroundColor: '#FFF4ED',
     borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#0D0D11',
     padding: 14,
   },
   recommendTitle: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 12,
-    color: '#B45309',
-    fontWeight: '600',
+    color: '#0D0D11',
+    fontWeight: '700',
   },
   recommendSub: {
-    fontSize: 10.5,
-    color: '#92400E',
+    fontFamily: THEME.typography.fontFamily.secondaryMedium,
+    fontSize: 11,
+    color: '#0D0D11',
     marginTop: 3,
+    lineHeight: 16,
   },
 
   // STEP 4 STYLES
   step4Container: {
     width: '100%',
   },
+  autoMessageCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F97316',
+  },
+  autoMessageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  autoMessageTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#F97316',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  autoMessageQuote: {
+    fontSize: 13.5,
+    color: '#1E293B',
+    lineHeight: 20,
+    fontWeight: '600',
+    fontStyle: 'italic',
+  },
   summaryCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: 22,
+    padding: 16,
     marginBottom: 14,
   },
   summaryRow: {
@@ -1044,15 +1060,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    backgroundColor: '#F3F4F6',
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxActive: {
-    backgroundColor: '#0D0D11',
+    backgroundColor: '#FFB380',
+    borderColor: '#FFB380',
   },
   checkboxText: {
     flex: 1,
@@ -1079,6 +1098,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backButtonText: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     color: '#4B5563',
     fontSize: 14.5,
     fontWeight: '700',
@@ -1092,6 +1112,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   nextButtonText: {
+    fontFamily: THEME.typography.fontFamily.mainExtraBold,
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',

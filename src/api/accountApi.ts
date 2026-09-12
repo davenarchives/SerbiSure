@@ -94,6 +94,7 @@ export interface PublicProfile {
   resume_url?: string | null;
   user_about: string;
   user_tags: string[];
+  street?: string | null;
   city: string | null;
   province: string | null;
   date_joined: string;
