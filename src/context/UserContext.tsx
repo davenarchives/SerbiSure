@@ -41,7 +41,7 @@ const defaultUser: UserData = {
   contactNumber: '',
   showContactNumber: false,
   userTags: [],
-  street: '',
+  street: 'Brgy. Pagatpat',
   city: 'City of Cagayan De Oro',
   province: 'Misamis Oriental',
   zipcode: '9000',

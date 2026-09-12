@@ -20,6 +20,7 @@ import { PostServiceScreen } from '../screens/kasambahay/PostServiceScreen';
 
 import { useUser } from '../context/UserContext';
 import { chatStore } from '../store/chatStore';
+import { preloadPostLoginAssets } from '../utils/imagePreloader';
 
 export type Role = 'homeowner' | 'kasambahay';
 export type Tab = 'home' | 'services' | 'chats' | 'profile';
@@ -53,6 +54,7 @@ export function BottomTabNavigator({ role = 'homeowner', avatarUri: oldAvatarUri
 
     if (authToken) {
       chatStore.loadInbox(authToken);
+      preloadPostLoginAssets(authToken, avatarUri);
     }
 
     const interval = setInterval(() => {
@@ -175,7 +177,7 @@ export function BottomTabNavigator({ role = 'homeowner', avatarUri: oldAvatarUri
                 {totalUnreadChats > 0 && (
                   <View style={styles.tabBadge}>
                     <Text style={styles.tabBadgeText}>
-                      {totalUnreadChats > 99 ? '99+' : totalUnreadChats}
+                      {totalUnreadChats > 9 ? '9+' : totalUnreadChats}
                     </Text>
                   </View>
                 )}
@@ -266,11 +268,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -5,
     right: -10,
-    minWidth: 19,
-    height: 19,
-    borderRadius: 9.5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: '#FE2C55',
-    paddingHorizontal: 4,
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
     alignItems: 'center',
@@ -278,7 +279,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   tabBadgeText: {
-    fontSize: 10.5,
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#FFFFFF',
     textAlign: 'center',

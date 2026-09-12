@@ -37,6 +37,8 @@ import { ManageTagsModal } from '../ManageTagsModal';
 import { ManageSocialLinksModal } from '../ManageSocialLinksModal';
 import { NotificationBell } from '../../context/NotificationContext';
 import { fetchNotifications } from '../../api/notificationsApi';
+import { formatRegisteredLocation } from '../../services/locationService';
+import THEME from '../../config/theme';
 
 const logoSource = require('../../../assets/serbisure-logo.png');
 
@@ -150,7 +152,7 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
               const verifiedTypes = new Set(
                 data.documents.filter((d) => d.verification_status === 'Verified').map((d) => d.document_type)
               );
-              if (verifiedTypes.has('national_id_front') && verifiedTypes.has('national_id_back')) {
+              if (verifiedTypes.has('national_id_front')) {
                 derivedStatus = 'Verified';
               }
             }
@@ -171,7 +173,7 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
           .filter((d) => d.verification_status === 'Verified')
           .map((d) => d.document_type)
       );
-      if (verifiedTypes.has('national_id_front') && verifiedTypes.has('national_id_back')) {
+      if (verifiedTypes.has('national_id_front')) {
         return 'Verified';
       }
       const docStatuses = new Set(verificationData.documents.map((d) => d.verification_status));
@@ -341,7 +343,7 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
 
         {currentView === 'personal_info' ? (
           <React.Fragment>
-            {/* Identity Hero Squircle Card */}
+            {/* Identity Hero Card (Clean Rounded Peach Neo-Pop Card) */}
             <View style={styles.personalHeroCard}>
               <Pressable style={styles.personalAvatarWrapper} onPress={handlePickImage}>
                 <Image
@@ -356,72 +358,67 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
               <View style={styles.personalNameRow}>
                 <Text style={styles.personalName}>{getFullName()}</Text>
                 {isVerified ? (
-                  <Ionicons name="checkmark-circle" size={18} color="#4CAF50" style={{ marginLeft: 6 }} />
+                  <Ionicons name="checkmark-circle" size={19} color="#10B981" style={{ marginLeft: 6 }} />
                 ) : null}
               </View>
 
-              <View style={styles.rolePillBadge}>
-                <Text style={styles.rolePillText}>{(user.accountType || 'HOMEOWNER').toUpperCase()}</Text>
-              </View>
+              <Text style={styles.heroSubRoleText}>
+                {user.accountType?.toLowerCase() === 'kasambahay' ? 'Kasambahay' : 'Homeowner'}
+              </Text>
 
               <View style={styles.locationRow}>
-                <Ionicons name="location" size={14} color="#FFB380" />
+                <Ionicons name="location-outline" size={14} color="#6B7280" />
                 <Text style={styles.locationText}>
-                  {[user.city, user.province].filter(Boolean).join(', ') || 'Cagayan de Oro, Misamis Oriental'}
+                  {formatRegisteredLocation(user.street, user.city, user.province)}
                 </Text>
               </View>
 
               {/* Email & Phone Contact Information */}
-              <View style={styles.contactDetailsContainer}>
-                {user.email ? (
-                  <View style={styles.contactItemRow}>
-                    <Ionicons name="mail" size={13} color="#9CA3AF" />
-                    <Text style={styles.contactItemText}>{user.email}</Text>
-                  </View>
-                ) : null}
-                {user.contactNumber ? (
-                  <View style={styles.contactItemRow}>
-                    <Ionicons name="call" size={13} color="#9CA3AF" />
-                    <Text style={styles.contactItemText}>{user.contactNumber}</Text>
-                    <Pressable
-                      style={[
-                        styles.privacyPill,
-                        showContactNumber ? styles.privacyPillPublic : styles.privacyPillPrivate,
-                      ]}
-                      onPress={() => handleToggleContactPrivacy(!showContactNumber)}
-                      disabled={isUpdatingPrivacy}
-                    >
-                      <Ionicons
-                        name={showContactNumber ? 'eye' : 'eye-off'}
-                        size={11}
-                        color={showContactNumber ? '#065F46' : '#6B7280'}
-                      />
-                      <Text
+              {(user.email || user.contactNumber) ? (
+                <View style={styles.contactDetailsContainer}>
+                  {user.email ? (
+                    <View style={styles.contactItemRow}>
+                      <Ionicons name="mail" size={13} color="#9CA3AF" />
+                      <Text style={styles.contactItemText}>{user.email}</Text>
+                    </View>
+                  ) : null}
+                  {user.contactNumber ? (
+                    <View style={styles.contactItemRow}>
+                      <Ionicons name="call" size={13} color="#9CA3AF" />
+                      <Text style={styles.contactItemText}>{user.contactNumber}</Text>
+                      <Pressable
                         style={[
-                          styles.privacyPillText,
-                          showContactNumber ? styles.privacyPillTextPublic : styles.privacyPillTextPrivate,
+                          styles.privacyPill,
+                          showContactNumber ? styles.privacyPillPublic : styles.privacyPillPrivate,
                         ]}
+                        onPress={() => handleToggleContactPrivacy(!showContactNumber)}
+                        disabled={isUpdatingPrivacy}
                       >
-                        {showContactNumber ? 'Public' : 'Private'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-              </View>
+                        <Ionicons
+                          name={showContactNumber ? 'eye' : 'eye-off'}
+                          size={11}
+                          color={showContactNumber ? '#065F46' : '#6B7280'}
+                        />
+                        <Text
+                          style={[
+                            styles.privacyPillText,
+                            showContactNumber ? styles.privacyPillTextPublic : styles.privacyPillTextPrivate,
+                          ]}
+                        >
+                          {showContactNumber ? 'Public' : 'Private'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Separator Line */}
+              <View style={styles.heroDividerLine} />
 
               {/* Worker Sentiment Track */}
               <View style={styles.sentimentCard}>
-                <View style={styles.sentimentTopRow}>
-                  <Text style={styles.sentimentCardLabel}>{t.workerSentiment}</Text>
-                  <Text
-                    style={[
-                      styles.sentimentCardScore,
-                      positivePercentage === null && { color: '#9CA3AF' },
-                    ]}
-                  >
-                    {positivePercentage !== null ? `${positivePercentage}% ${t.positive}` : t.noReviewsYet}
-                  </Text>
-                </View>
+                <Text style={styles.sentimentCardLabel}>{t.workerSentiment}</Text>
                 <View style={styles.sentimentTrack}>
                   <View
                     style={[
@@ -433,49 +430,40 @@ export function ProfileScreen({ avatarUri, initialView = 'main', onUpdateAvatar,
                     ]}
                   />
                 </View>
-              </View>
-            </View>
-
-            {/* Profile Tags Card */}
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionCardHeader}>
-                <View>
-                  <Text style={styles.sectionCardTitle}>Profile Tags</Text>
-                  <Text style={styles.sectionCardSubtitle}>Household & worker preferences</Text>
-                </View>
-                <Pressable
-                  style={styles.actionPillButton}
-                  onPress={() => setIsManageTagsModalVisible(true)}
-                  hitSlop={8}
+                <Text
+                  style={[
+                    styles.sentimentCardScore,
+                    positivePercentage === null && { color: '#9CA3AF' },
+                  ]}
                 >
-                  <Ionicons name="add" size={13} color="#FFFFFF" />
-                  <Text style={styles.actionPillButtonText}>
-                    {tags && tags.length > 0 ? 'Edit Tags' : 'Add Tags'}
-                  </Text>
-                </Pressable>
+                  {positivePercentage !== null ? `${positivePercentage}% ${t.positive}` : t.noReviewsYet}
+                </Text>
               </View>
 
+              {/* Integrated Profile Tags within the Hero Card */}
               {tags && tags.length > 0 ? (
-                <View style={styles.tagsFlexWrap}>
+                <View style={styles.heroTagsWrap}>
                   {tags.map((tagItem, idx) => (
-                    <View key={`${tagItem}-${idx}`} style={styles.cleanPillTag}>
-                      <Text style={styles.cleanPillTagText}>{tagItem}</Text>
+                    <View key={`${tagItem}-${idx}`} style={styles.heroTagPill}>
+                      <Text style={styles.heroTagPillText}>{tagItem}</Text>
                     </View>
                   ))}
+                  <Pressable
+                    style={styles.heroTagEditBtn}
+                    onPress={() => setIsManageTagsModalVisible(true)}
+                    hitSlop={6}
+                  >
+                    <Ionicons name="pencil" size={11} color="#0D0D11" />
+                    <Text style={styles.heroTagEditBtnText}>Edit</Text>
+                  </Pressable>
                 </View>
               ) : (
                 <Pressable
-                  style={styles.emptyActionTile}
+                  style={styles.heroAddTagsRow}
                   onPress={() => setIsManageTagsModalVisible(true)}
                 >
-                  <View style={styles.emptyActionIconCircle}>
-                    <Ionicons name="pricetag" size={18} color="#0D0D11" />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.emptyActionTitle}>Describe your household</Text>
-                    <Text style={styles.emptyActionSubtitle}>Add tags like Pet Owner, Toddler, Elder Care...</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
+                  <Ionicons name="add-circle-outline" size={16} color="#B45309" />
+                  <Text style={styles.heroAddTagsText}>Describe your household</Text>
                 </Pressable>
               )}
             </View>
@@ -1032,50 +1020,72 @@ const styles = StyleSheet.create({
 
   // Personal Info Detailed View
   personalHeroCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    padding: 22,
+    backgroundColor: '#FFE9D5',
+    borderRadius: 32,
+    paddingHorizontal: 22,
+    paddingBottom: 22,
+    paddingTop: 18,
     marginHorizontal: 16,
+    marginTop: 38,
     marginBottom: 14,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   personalAvatarWrapper: {
     position: 'relative',
-    marginBottom: 10,
+    alignSelf: 'flex-start',
+    marginTop: -48,
+    marginLeft: 2,
+    marginBottom: 12,
   },
   personalAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 4,
+    borderColor: '#FFE9D5',
   },
   cameraIconBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: 2,
+    right: 2,
     width: 26,
     height: 26,
     borderRadius: 13,
     backgroundColor: '#0D0D11',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFE9D5',
   },
   personalNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
+    justifyContent: 'flex-start',
+    alignSelf: 'flex-start',
+    marginBottom: 2,
   },
   personalName: {
-    fontSize: 20,
+    fontFamily: THEME.typography.fontFamily.mainExtraBold,
+    fontSize: 22,
     fontWeight: '800',
     color: '#0D0D11',
+    textAlign: 'left',
+  },
+  heroSubRoleText: {
+    fontFamily: THEME.typography.fontFamily.secondaryMedium,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginBottom: 4,
+    textAlign: 'left',
+    alignSelf: 'flex-start',
   },
   rolePillBadge: {
     backgroundColor: '#FFB380',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 9999,
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
     marginBottom: 8,
   },
   heroRolePillBadge: {
@@ -1088,6 +1098,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   rolePillText: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 10.5,
     fontWeight: '800',
     color: '#0D0D11',
@@ -1096,21 +1107,24 @@ const styles = StyleSheet.create({
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 4,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   locationText: {
-    fontSize: 12.5,
-    color: '#6B7280',
+    fontFamily: THEME.typography.fontFamily.secondary,
+    fontSize: 13,
+    color: '#4B5563',
     fontWeight: '500',
+    textAlign: 'left',
   },
   contactDetailsContainer: {
     width: '100%',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
     borderRadius: 18,
     padding: 12,
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   contactItemRow: {
     flexDirection: 'row',
@@ -1118,6 +1132,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   contactItemText: {
+    fontFamily: THEME.typography.fontFamily.secondaryMedium,
     fontSize: 12.5,
     color: '#374151',
     fontWeight: '600',
@@ -1138,6 +1153,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   privacyPillText: {
+    fontFamily: THEME.typography.fontFamily.secondaryBold,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -1147,37 +1163,93 @@ const styles = StyleSheet.create({
   privacyPillTextPrivate: {
     color: '#6B7280',
   },
+  heroDividerLine: {
+    width: '100%',
+    height: 1,
+    backgroundColor: 'rgba(217, 119, 6, 0.25)',
+    marginBottom: 14,
+  },
   sentimentCard: {
     width: '100%',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 18,
-    padding: 14,
-  },
-  sentimentTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 14,
   },
   sentimentCardLabel: {
-    fontSize: 12.5,
+    fontFamily: THEME.typography.fontFamily.mainBold,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#0D0D11',
+    marginRight: 8,
   },
   sentimentCardScore: {
-    fontSize: 11.5,
+    fontFamily: THEME.typography.fontFamily.secondaryBold,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#10B981',
+    color: '#16A34A',
+    marginLeft: 8,
   },
   sentimentTrack: {
-    height: 8,
-    backgroundColor: '#E5E7EB',
+    flex: 1,
+    height: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
     borderRadius: 9999,
     overflow: 'hidden',
   },
   sentimentFill: {
     height: '100%',
     borderRadius: 9999,
+    backgroundColor: '#22C55E',
+  },
+  heroTagsWrap: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  heroTagPill: {
+    backgroundColor: '#FFAC59',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 9999,
+  },
+  heroTagPillText: {
+    fontFamily: THEME.typography.fontFamily.mainExtraBold,
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  heroTagEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 9999,
+  },
+  heroTagEditBtnText: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0D0D11',
+  },
+  heroAddTagsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 9999,
+  },
+  heroAddTagsText: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B45309',
   },
   sectionCard: {
     backgroundColor: '#FFFFFF',
@@ -1193,11 +1265,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   sectionCardTitle: {
+    fontFamily: THEME.typography.fontFamily.mainExtraBold,
     fontSize: 16,
     fontWeight: '800',
     color: '#0D0D11',
   },
   sectionCardSubtitle: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 11.5,
     fontWeight: '500',
     color: '#9CA3AF',
@@ -1213,6 +1287,7 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
   },
   actionPillButtonText: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 11.5,
     fontWeight: '700',
     color: '#FFFFFF',
@@ -1229,6 +1304,7 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
   },
   cleanPillTagText: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     color: '#B45309',
     fontSize: 12,
     fontWeight: '700',
@@ -1249,11 +1325,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyActionTitle: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 13,
     fontWeight: '700',
     color: '#0D0D11',
   },
   emptyActionSubtitle: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 11,
     color: '#9CA3AF',
     marginTop: 2,
@@ -1264,6 +1342,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   bioBodyText: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 13,
     lineHeight: 20,
     color: '#374151',
@@ -1280,11 +1359,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   reviewsSectionTitle: {
+    fontFamily: THEME.typography.fontFamily.mainExtraBold,
     fontSize: 15,
     fontWeight: '800',
     color: '#0D0D11',
   },
   viewAllPill: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 11.5,
     fontWeight: '700',
     color: '#FFB380',
@@ -1311,11 +1392,13 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
   },
   positiveBadgeText: {
+    fontFamily: THEME.typography.fontFamily.secondaryBold,
     fontSize: 10,
     fontWeight: '700',
     color: '#065F46',
   },
   reviewText: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 12.5,
     color: '#4B5563',
     lineHeight: 18,
@@ -1323,6 +1406,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   reviewAuthor: {
+    fontFamily: THEME.typography.fontFamily.secondarySemiBold,
     fontSize: 11,
     fontWeight: '600',
     color: '#9CA3AF',
@@ -1334,12 +1418,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyReviewsTitle: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 13.5,
     fontWeight: '700',
     color: '#6B7280',
     marginTop: 8,
   },
   emptyReviewsSubtitle: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 11.5,
     color: '#9CA3AF',
     textAlign: 'center',

@@ -399,3 +399,74 @@ export function getZipCodeForCity(cityCode: string, cityName?: string): string {
 
   return '';
 }
+
+/**
+ * Formats a user's registered location into Barangay and City (e.g., "Pagatpat, CDO").
+ * Handles street addresses storing the barangay (e.g. "Brgy. Pagatpat, Z4 Blk4 H26"),
+ * standardizes "City of Cagayan De Oro" to "CDO", and falls back safely to "Pagatpat, CDO".
+ */
+export function formatRegisteredLocation(
+  street?: string | null,
+  city?: string | null,
+  province?: string | null
+): string {
+  let brgy = '';
+
+  if (street) {
+    // Check if street starts with Brgy. or Barangay
+    const brgyMatch = street.match(/(?:brgy\.?|barangay)\s*([^,]+)/i);
+    if (brgyMatch && brgyMatch[1]) {
+      brgy = brgyMatch[1].trim();
+    } else {
+      const parts = street.split(',');
+      const firstPart = (parts[0] || '').trim();
+      if (firstPart && !firstPart.match(/^(lot|blk|block|zone|street|st\.|phase|h\s*\d+)/i)) {
+        brgy = firstPart;
+      }
+    }
+  }
+
+  // Normalize city name
+  let cityClean = (city || '').trim();
+  if (cityClean.toLowerCase() === 'pagatpat') {
+    brgy = 'Pagatpat';
+    cityClean = 'CDO';
+  } else if (cityClean.toLowerCase().includes('cagayan de oro')) {
+    cityClean = 'CDO';
+  } else if (cityClean) {
+    cityClean = cityClean.replace(/^city of\s+/i, '').replace(/\s+city$/i, '').trim();
+  }
+
+  // Clean up brgy prefix if it still has "Brgy. " or "Barangay "
+  if (brgy) {
+    brgy = brgy.replace(/^(brgy\.?|barangay)\s+/i, '').trim();
+  }
+
+  // If no brgy extracted from street, check if street contains known CDO barangay
+  if (!brgy && street) {
+    const lowerStreet = street.toLowerCase();
+    for (const b of FALLBACK_CDO_BARANGAYS) {
+      if (lowerStreet.includes(b.name.toLowerCase())) {
+        brgy = b.name;
+        break;
+      }
+    }
+  }
+
+  if (brgy && cityClean) {
+    return `${brgy}, ${cityClean}`;
+  }
+  if (brgy) {
+    return `${brgy}, CDO`;
+  }
+  if (cityClean === 'CDO') {
+    return 'Pagatpat, CDO';
+  }
+  if (cityClean) {
+    return cityClean;
+  }
+  if (province) {
+    return province.trim();
+  }
+  return 'Pagatpat, CDO';
+}

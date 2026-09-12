@@ -2,16 +2,20 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import THEME from '../config/theme';
 
-export type RegistrationStepNumber = 1 | 2 | 3 | 4;
+export type RegistrationStepNumber = 1 | 2 | 3 | 4 | 5;
 
 interface RegistrationStepperProps {
   currentStep: RegistrationStepNumber;
   title: string;
   help?: string;
+  totalSteps?: number;
 }
 
-export function RegistrationStepper({ currentStep, title, help }: RegistrationStepperProps) {
-  const steps: RegistrationStepNumber[] = [1, 2, 3, 4];
+export function RegistrationStepper({ currentStep, title, help, totalSteps = 4 }: RegistrationStepperProps) {
+  const steps: RegistrationStepNumber[] = Array.from(
+    { length: totalSteps },
+    (_, idx) => (idx + 1) as RegistrationStepNumber
+  );
 
   return (
     <View style={styles.container}>

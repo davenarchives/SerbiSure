@@ -96,7 +96,7 @@ export function NotificationBell() {
       {unreadCount > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>
-            {unreadCount > 99 ? '99+' : unreadCount}
+            {unreadCount > 9 ? '9+' : unreadCount}
           </Text>
         </View>
       )}
@@ -118,17 +118,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 2,
     right: 2,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 17,
+    height: 17,
+    borderRadius: 8.5,
     backgroundColor: '#EF4444',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 3,
   },
   badgeText: {
     color: '#FFFFFF',
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: '800',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, Image, ScrollView, Pressable, Modal, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,76 +7,135 @@ import { useUser } from '../../context/UserContext';
 import THEME from '../../config/theme';
 import { useJobsActivity } from '../../store/savedJobsStore';
 import { NotificationBell } from '../../context/NotificationContext';
+import { JobDetailSheet } from '../../components/JobDetailSheet';
+import { API_BASE_URL, fetchWithTimeout } from '../../config/api';
 
 const logoSource = require('../../../assets/serbisure_new_clean.png');
 
 interface JobOffer {
-  id: number;
+  id: string | number;
+  partnerId?: string | number;
   employerName: string;
   avatar: string;
   time: string;
   location: string;
   roleTag: string;
   termTag: string;
+  setupTag?: string;
+  tags?: string[];
   price: string;
   unit: string;
   aboutText: string;
 }
 
-const MOCK_JOBS: JobOffer[] = [
-  {
-    id: 1,
-    employerName: 'Joshua Asucal',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300',
-    time: 'Posted 1h ago',
-    location: 'Brgy. Pagatpat, CDO',
-    roleTag: 'Cook',
-    termTag: 'Long-term',
-    price: '₱15,000',
-    unit: '/ month',
-    aboutText: 'Experienced cook for daily meal preparation — breakfast, lunch & dinner. Comfortable with Filipino and simple Western dishes. Available Mon–Sat.',
-  },
-  {
-    id: 2,
-    employerName: 'Camille Prats',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=300',
-    time: 'Posted 2h ago',
-    location: 'Makati City',
-    roleTag: 'Cleaner',
-    termTag: 'Short-term',
-    price: '₱2,500',
-    unit: '/ service',
-    aboutText: 'Deep cleaning needed for 2-bedroom condo unit. Includes vacuuming, scrubbing bathrooms, wiping down kitchen cabinets, and washing windows.',
-  },
-  {
-    id: 3,
-    employerName: 'Sabrina Reyes',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=300',
-    time: 'Posted 5h ago',
-    location: 'Quezon City',
-    roleTag: 'Yaya / Nanny',
-    termTag: 'Long-term',
-    price: '₱8,000',
-    unit: '/ month',
-    aboutText: 'Caring nanny for a 2-year-old child. Responsible for feeding, playing, bathing, and light nursery cleanup. Experience with toddlers preferred.',
-  },
-];
+function formatTimeAgo(dateString?: string) {
+  if (!dateString) return 'Recently';
+  const now = new Date().getTime();
+  const created = new Date(dateString).getTime();
+  const diffMs = Math.max(0, now - created);
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  if (diffMins < 60) return `Posted ${Math.max(1, diffMins)}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `Posted ${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `Posted ${diffDays}d ago`;
+}
 
-export function HomeScreen({ avatarUri, onAvatarPress, onViewProfile }: { avatarUri?: string | null; onAvatarPress?: () => void; onViewProfile?: () => void }) {
+interface HomeScreenProps {
+  avatarUri?: string | null;
+  onAvatarPress?: () => void;
+  onViewProfile?: () => void;
+  onViewAll?: () => void;
+  token?: string | null;
+}
+
+export function HomeScreen({ avatarUri, onAvatarPress, onViewProfile, onViewAll, token }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
-  const { getFirstNameOnly } = useUser();
+  const { user, getFirstNameOnly } = useUser();
+  const effectiveToken = token || user?.token;
+  const [jobs, setJobs] = useState<JobOffer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<JobOffer | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { isSaved, isApplied, toggleSave, applyJob } = useJobsActivity();
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
+  const fetchJobs = async () => {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      const response = await fetchWithTimeout(`${API_BASE_URL}/api/v1/booking/feed/`, {
+        headers: effectiveToken ? { Authorization: `Bearer ${effectiveToken}` } : {},
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const liveJobs: JobOffer[] = data.map((item: any) => {
+          const rawCategories = Array.isArray(item.service_category)
+            ? item.service_category
+            : item.service_category
+            ? [item.service_category]
+            : ['Household'];
+
+          const categoryMap: Record<string, string> = {
+            Cleaning: 'Cleaning',
+            Child_care: 'Child Care',
+            Cooking: 'Cook',
+            Caregiver: 'Caregiver',
+            Laundry: 'Laundry',
+            'All-around': 'All-around',
+          };
+          const categories = rawCategories.map((c: string) => categoryMap[c] || c.replace(/_/g, ' '));
+          const avatarUrl =
+            item.profile_link ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name || 'Homeowner')}&background=FFB43B&color=fff`;
+
+          const isLongTerm = item.booking_type === 'long_term';
+          const termTag = isLongTerm ? 'Long-term' : 'Part-time';
+          const unit = isLongTerm ? '/ month' : '/ day';
+
+          let description = item.special_instruction && item.special_instruction.trim()
+            ? item.special_instruction.trim()
+            : (isLongTerm
+                ? `I am looking for ${categories.join(' & ')} at ${item.service_address || 'residence'}, capable of working on a stay-in setup.`
+                : `I am looking for ${categories.join(' & ')} at ${item.service_address || 'residence'}, capable of working on a stay-out setup.`);
+
+          const descLower = description.toLowerCase();
+          const setupTag = descLower.includes('stay-in') ? 'Stay-in' : descLower.includes('stay-out') ? 'Stay-out' : (isLongTerm ? 'Stay-in' : 'Stay-out');
+
+          return {
+            id: item.booking_id,
+            partnerId: item.poster_id,
+            employerName: item.name || 'Homeowner',
+            avatar: avatarUrl,
+            time: formatTimeAgo(item.createdAt),
+            location: item.service_address || 'Cagayan de Oro',
+            roleTag: categories[0] || 'Household Service',
+            termTag,
+            setupTag,
+            tags: ['Verified Employer', termTag, setupTag, ...categories].filter((v, i, a) => a.indexOf(v) === i),
+            price: `₱${item.daily_rate || '0'}`,
+            unit,
+            aboutText: description,
+          };
+        });
+        setJobs(liveJobs);
+      }
+    } catch (error) {
+      console.warn('[HomeScreen] Failed to fetch feed', error);
     } finally {
+      setIsLoading(false);
       setIsRefreshing(false);
     }
+  };
+
+  useEffect(() => {
+    if (effectiveToken) {
+      fetchJobs();
+    }
+  }, [effectiveToken]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchJobs();
   };
 
   const handleApply = (job: JobOffer) => {
@@ -140,23 +199,34 @@ export function HomeScreen({ avatarUri, onAvatarPress, onViewProfile }: { avatar
 
         {/* Section Header */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle} numberOfLines={1} adjustsFontSizeToFit>{t.popularServices}</Text>
-          <Text style={styles.seeAllText}>{t.viewAll}</Text>
+          <Text style={styles.sectionTitle} numberOfLines={1} adjustsFontSizeToFit>Recent Posts</Text>
+          <Pressable onPress={onViewAll} hitSlop={10}>
+            <Text style={styles.seeAllText}>View All</Text>
+          </Pressable>
         </View>
 
         {/* Job List */}
         <View style={styles.jobList}>
-          {MOCK_JOBS.map((job) => {
-            const applied = isApplied(job.id);
-            const saved = isSaved(job.id);
+          {jobs.length === 0 && !isLoading ? (
+            <View style={styles.emptyStateContainer}>
+              <Ionicons name="newspaper-outline" size={36} color="#CBD5E1" style={{ marginBottom: 8 }} />
+              <Text style={styles.emptyStateTitle}>No Recent Posts</Text>
+              <Text style={styles.emptyStateSubtitle}>
+                There are no open job requests at the moment. Check back soon!
+              </Text>
+            </View>
+          ) : (
+            jobs.map((job) => {
+              const applied = isApplied(job.id);
+              const saved = isSaved(job.id);
 
-            return (
-              <Pressable key={job.id} style={styles.jobCard} onPress={() => setSelectedJob(job)}>
-                <View style={styles.jobHeader}>
-                  <Pressable onPress={onViewProfile}>
-                    <Image source={{ uri: job.avatar }} style={styles.employerAvatar} />
-                  </Pressable>
-                  <View style={styles.jobEmployerInfo}>
+              return (
+                <Pressable key={job.id} style={styles.jobCard} onPress={() => setSelectedJob(job)}>
+                  <View style={styles.jobHeader}>
+                    <Pressable onPress={onViewProfile}>
+                      <Image source={{ uri: job.avatar }} style={styles.employerAvatar} />
+                    </Pressable>
+                    <View style={styles.jobEmployerInfo}>
                     <Pressable style={styles.nameRow} onPress={onViewProfile}>
                       <Text style={styles.employerName}>{job.employerName}</Text>
                       <Ionicons name="checkmark-circle" size={16} color="#10B981" style={{ marginLeft: 4 }} />
@@ -216,98 +286,22 @@ export function HomeScreen({ avatarUri, onAvatarPress, onViewProfile }: { avatar
                 </View>
               </Pressable>
             );
-          })}
+          }))}
         </View>
 
         <View style={{ height: 100 }} />
       </ScrollView>
 
       {/* Job Details Modal Sheet */}
-      <Modal visible={!!selectedJob} transparent animationType="slide" onRequestClose={() => setSelectedJob(null)}>
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setSelectedJob(null)} />
-          {selectedJob && (
-            <View style={styles.sheetContent}>
-              <View style={styles.sheetHandle} />
-
-              <View style={styles.sheetHeader}>
-                <Image source={{ uri: selectedJob.avatar }} style={styles.sheetAvatar} />
-                <View style={styles.sheetTitleInfo}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.sheetEmployerName}>{selectedJob.employerName}</Text>
-                    <Ionicons name="checkmark-circle" size={18} color="#4CAF50" style={{ marginLeft: 4 }} />
-                  </View>
-                  <Text style={styles.sheetLocation}>
-                    <Ionicons name="location-sharp" size={12} color="#666" /> {selectedJob.location}
-                  </Text>
-                  <View style={styles.sheetTagRow}>
-                    <View style={[styles.tagBadge, styles.tagRole]}>
-                      <Text style={styles.tagRoleText}>{selectedJob.roleTag}</Text>
-                    </View>
-                    <Text style={styles.sheetPostTime}>{selectedJob.time}</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Price & Term */}
-              <View style={styles.sheetPriceRow}>
-                <Text style={styles.sheetPrice}>
-                  {selectedJob.price} <Text style={styles.sheetUnit}>{selectedJob.unit}</Text>
-                </Text>
-                <View style={[styles.tagBadge, styles.tagTerm]}>
-                  <Text style={styles.tagTermText}>{selectedJob.termTag}</Text>
-                </View>
-              </View>
-
-              {/* About this role */}
-              <View style={styles.aboutBox}>
-                <Text style={styles.aboutTitle}>ABOUT THIS ROLE</Text>
-                <Text style={styles.aboutBody}>{selectedJob.aboutText}</Text>
-              </View>
-
-              {/* Feedback summary */}
-              <Text style={styles.feedbackTitle}>Worker Feedback Summary</Text>
-              <View style={styles.feedbackRow}>
-                <View style={[styles.feedbackCard, styles.feedbackPositive]}>
-                  <Text style={[styles.feedbackValue, { color: '#00875A' }]}>72%</Text>
-                  <Text style={[styles.feedbackLabel, { color: '#00875A' }]}>Positive</Text>
-                </View>
-                <View style={[styles.feedbackCard, styles.feedbackNeutral]}>
-                  <Text style={[styles.feedbackValue, { color: '#5E6C84' }]}>18%</Text>
-                  <Text style={[styles.feedbackLabel, { color: '#5E6C84' }]}>Neutral</Text>
-                </View>
-                <View style={[styles.feedbackCard, styles.feedbackNegative]}>
-                  <Text style={[styles.feedbackValue, { color: '#DE350B' }]}>10%</Text>
-                  <Text style={[styles.feedbackLabel, { color: '#DE350B' }]}>Negative</Text>
-                </View>
-              </View>
-
-              {/* Compliance banner */}
-              <View style={styles.complianceBox}>
-                <Ionicons name="information-circle" size={18} color="#7C3AED" style={{ marginRight: 8, marginTop: 2 }} />
-                <Text style={styles.complianceText}>
-                  SerbiSure enforces fair wage compliance (₱9,000 meets RTWPB-10 minimum). Our Booking Frequency Cap prevents illegal misclassification of regular work as short-term gigs.
-                </Text>
-              </View>
-
-              {/* Apply button */}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.applyNowBtn,
-                  isApplied(selectedJob.id) && styles.applyNowBtnDone,
-                  pressed && { opacity: 0.8 },
-                ]}
-                onPress={() => handleApply(selectedJob)}
-              >
-                <Text style={styles.applyNowText}>
-                  {isApplied(selectedJob.id) ? 'Application Submitted' : 'Apply Now'}
-                </Text>
-              </Pressable>
-              <Text style={styles.applyNotice}>Your application goes directly to the employer</Text>
-            </View>
-          )}
-        </View>
-      </Modal>
+      <JobDetailSheet
+        visible={!!selectedJob}
+        job={selectedJob}
+        onClose={() => setSelectedJob(null)}
+        onApply={() => selectedJob && handleApply(selectedJob)}
+        isApplied={selectedJob ? isApplied(selectedJob.id) : false}
+        isSaved={selectedJob ? isSaved(selectedJob.id) : false}
+        onToggleSave={() => selectedJob && toggleSave(selectedJob)}
+      />
     </View>
   );
 }
@@ -697,5 +691,28 @@ const styles = StyleSheet.create({
     fontFamily: THEME.typography.fontFamily.secondaryRegular,
     color: THEME.colors.textMuted,
     textAlign: 'center',
+  },
+  emptyStateContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  emptyStateTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0D0D11',
+    marginBottom: 4,
+    fontFamily: THEME.typography.fontFamily.display,
+  },
+  emptyStateSubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    fontWeight: '500',
+    fontFamily: THEME.typography.fontFamily.secondaryRegular,
   },
 });

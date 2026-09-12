@@ -26,6 +26,7 @@ import { useUser } from '../../context/UserContext';
 import { NotificationBell } from '../../context/NotificationContext';
 import THEME from '../../config/theme';
 import { useJobsActivity, SavedJobItem } from '../../store/savedJobsStore';
+import { JobDetailSheet } from '../../components/JobDetailSheet';
 
 const logoSource = require('../../../assets/serbisure_new_clean.png');
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -43,6 +44,9 @@ export interface JobOpening {
   tags: string[];
   image: string;
   avatar: string;
+  roleTag?: string;
+  termTag?: string;
+  aboutText?: string;
 }
 
 const FILTER_TABS = ['All', 'Stay-in', 'Part-time', 'Cleaning', 'Cooking', 'Caregiver'];
@@ -98,6 +102,10 @@ export function JobsScreen({ onViewProfile, token }: { onViewProfile?: () => voi
     role: string;
     avatar: string;
     initialMessage?: string;
+    initialReplyTo?: {
+      author: string;
+      text: string;
+    };
   }>({
     visible: false,
     partnerId: undefined,
@@ -237,16 +245,37 @@ export function JobsScreen({ onViewProfile, token }: { onViewProfile?: () => voi
       if (response.ok) {
         const data = await response.json();
         const liveJobs: JobOpening[] = data.map((item: any) => {
-          const categories = Array.isArray(item.service_category)
+          const rawCategories = Array.isArray(item.service_category)
             ? item.service_category
             : item.service_category
             ? [item.service_category]
             : ['Household'];
+
+          const categoryMap: Record<string, string> = {
+            Cleaning: 'Cleaning',
+            Child_care: 'Child Care',
+            Cooking: 'Cook',
+            Caregiver: 'Caregiver',
+            Laundry: 'Laundry',
+            'All-around': 'All-around',
+          };
+          const categories = rawCategories.map((c: string) => categoryMap[c] || c.replace(/_/g, ' '));
           const avatarUrl =
             item.profile_link ||
             `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name || 'Homeowner')}&background=FFB43B&color=fff`;
 
-          const typeLabel = item.booking_type === 'long_term' ? 'Stay-in' : 'Part-time';
+          const isLongTerm = item.booking_type === 'long_term';
+          const termTag = isLongTerm ? 'Long-term' : 'Part-time';
+          const unit = isLongTerm ? 'per month' : 'per day';
+
+          let description = item.special_instruction && item.special_instruction.trim()
+            ? item.special_instruction.trim()
+            : (isLongTerm
+                ? `I am looking for ${categories.join(' & ')} at ${item.service_address || 'residence'}, capable of working on a stay-in setup.`
+                : `I am looking for ${categories.join(' & ')} at ${item.service_address || 'residence'}, capable of working on a stay-out setup.`);
+
+          const descLower = description.toLowerCase();
+          const setupTag = descLower.includes('stay-in') ? 'Stay-in' : descLower.includes('stay-out') ? 'Stay-out' : (isLongTerm ? 'Stay-in' : 'Stay-out');
 
           return {
             id: item.booking_id,
@@ -254,12 +283,15 @@ export function JobsScreen({ onViewProfile, token }: { onViewProfile?: () => voi
             employerName: item.name || 'Homeowner',
             title: categories.join(' & ') || 'Household Service',
             location: item.service_address || 'Cagayan de Oro',
-            description: `Looking for ${categories.join(', ')} (${typeLabel}) at ${item.service_address || 'residence'}.`,
+            description,
             price: `P ${item.daily_rate || '0'}`,
-            unit: 'per day',
-            tags: ['Verified Employer', typeLabel, ...categories],
+            unit,
+            tags: ['Verified Employer', termTag, setupTag, ...categories].filter((v, i, a) => a.indexOf(v) === i),
             image: avatarUrl,
             avatar: avatarUrl,
+            roleTag: categories[0] || 'Household Help',
+            termTag,
+            aboutText: description,
           };
         });
 
@@ -360,7 +392,13 @@ export function JobsScreen({ onViewProfile, token }: { onViewProfile?: () => voi
       showCountAnimation('plus');
       handleApplyJob(currentJob);
 
-      // Directly open ChatDetailScreen modal with auto message!
+      const jobRole = currentJob.roleTag || currentJob.title || 'Household Service';
+      const jobRate = `${currentJob.price} ${currentJob.unit}`.trim();
+      const jobLocation = currentJob.location || 'Cagayan de Oro';
+      const jobTerm = currentJob.termTag || (currentJob.tags && currentJob.tags[1]) || '';
+      const replySnippet = `${jobRole} • ${jobRate} • ${jobLocation}${jobTerm ? ` • ${jobTerm}` : ''}`;
+
+      // Directly open ChatDetailScreen modal replying to this specific job post!
       setActiveChat({
         visible: true,
         partnerId: currentJob.partnerId,
@@ -368,6 +406,10 @@ export function JobsScreen({ onViewProfile, token }: { onViewProfile?: () => voi
         role: 'Homeowner',
         avatar: currentJob.avatar,
         initialMessage: 'I am interested in this job position',
+        initialReplyTo: {
+          author: 'Job Post',
+          text: replySnippet,
+        },
       });
     } else {
       showCountAnimation('minus');
@@ -1017,127 +1059,39 @@ export function JobsScreen({ onViewProfile, token }: { onViewProfile?: () => voi
       )}
 
       {/* Role Details Modal Sheet */}
-      <Modal
+      {/* Job Details Modal Sheet */}
+      <JobDetailSheet
         visible={!!selectedJobForDetails}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSelectedJobForDetails(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setSelectedJobForDetails(null)} />
-          {selectedJobForDetails && (
-            <View style={styles.sheetContent}>
-              <View style={styles.sheetHandle} />
-
-              <View style={styles.sheetHeader}>
-                <Image
-                  source={{ uri: (selectedJobForDetails as any).avatar || (selectedJobForDetails as any).image }}
-                  style={styles.sheetAvatar}
-                />
-                <View style={styles.sheetTitleInfo}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.sheetEmployerName}>
-                      {(selectedJobForDetails as any).employerName || (selectedJobForDetails as any).title || 'Homeowner'}
-                    </Text>
-                    <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginLeft: 4 }} />
-                  </View>
-                  <Text style={styles.sheetLocation}>
-                    <Ionicons name="location-sharp" size={12} color="#666" /> {selectedJobForDetails.location || 'Cagayan de Oro'}
-                  </Text>
-                  <View style={styles.sheetTagRow}>
-                    <View style={[styles.tagBadge, styles.tagRole]}>
-                      <Text style={styles.tagRoleText}>
-                        {(selectedJobForDetails as any).roleTag ||
-                          ((selectedJobForDetails as any).tags && (selectedJobForDetails as any).tags[1]) ||
-                          'Service'}
-                      </Text>
-                    </View>
-                    <Text style={styles.sheetPostTime}>{(selectedJobForDetails as any).time || 'Active today'}</Text>
-                  </View>
-                </View>
-
-                {/* Bookmark Button in Sheet Header */}
-                <Pressable
-                  style={styles.sheetBookmarkBtn}
-                  onPress={() => handleToggleSave(selectedJobForDetails)}
-                  hitSlop={10}
-                >
-                  <Ionicons
-                    name={isSaved(selectedJobForDetails.id) ? 'bookmark' : 'bookmark-outline'}
-                    size={24}
-                    color={THEME.colors.ink}
-                  />
-                </Pressable>
-              </View>
-
-              {/* Price & Term */}
-              <View style={styles.sheetPriceRow}>
-                <Text style={styles.sheetPrice}>
-                  {selectedJobForDetails.price}{' '}
-                  <Text style={styles.sheetUnit}>{selectedJobForDetails.unit || '/ month'}</Text>
-                </Text>
-                <View style={[styles.tagBadge, styles.tagTerm]}>
-                  <Text style={styles.tagTermText}>
-                    {(selectedJobForDetails as any).termTag ||
-                      ((selectedJobForDetails as any).tags && (selectedJobForDetails as any).tags[2]) ||
-                      'Part-time'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* About this role */}
-              <View style={styles.aboutBox}>
-                <Text style={styles.aboutTitle}>ABOUT THIS ROLE</Text>
-                <Text style={styles.aboutBody}>
-                  {(selectedJobForDetails as any).aboutText ||
-                    (selectedJobForDetails as any).description ||
-                    'Looking for reliable, verified household assistance in a safe, friendly home.'}
-                </Text>
-              </View>
-
-              {/* Feedback summary */}
-              <Text style={styles.feedbackTitle}>Worker Feedback Summary</Text>
-              <View style={styles.feedbackRow}>
-                <View style={[styles.feedbackCard, styles.feedbackPositive]}>
-                  <Text style={[styles.feedbackValue, { color: '#00875A' }]}>72%</Text>
-                  <Text style={[styles.feedbackLabel, { color: '#00875A' }]}>Positive</Text>
-                </View>
-                <View style={[styles.feedbackCard, styles.feedbackNeutral]}>
-                  <Text style={[styles.feedbackValue, { color: '#5E6C84' }]}>18%</Text>
-                  <Text style={[styles.feedbackLabel, { color: '#5E6C84' }]}>Neutral</Text>
-                </View>
-                <View style={[styles.feedbackCard, styles.feedbackNegative]}>
-                  <Text style={[styles.feedbackValue, { color: '#DE350B' }]}>10%</Text>
-                  <Text style={[styles.feedbackLabel, { color: '#DE350B' }]}>Negative</Text>
-                </View>
-              </View>
-
-              {/* Compliance banner */}
-              <View style={styles.complianceBox}>
-                <Ionicons name="information-circle" size={18} color="#7C3AED" style={{ marginRight: 8, marginTop: 2 }} />
-                <Text style={styles.complianceText}>
-                  SerbiSure enforces fair wage compliance (₱9,000 meets RTWPB-10 minimum). Our Booking Frequency Cap prevents illegal misclassification of regular work as short-term gigs.
-                </Text>
-              </View>
-
-              {/* Apply button */}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.applyNowBtn,
-                  isApplied(selectedJobForDetails.id) && styles.applyNowBtnDone,
-                  pressed && { opacity: 0.8 },
-                ]}
-                onPress={() => handleApplyJob(selectedJobForDetails)}
-              >
-                <Text style={styles.applyNowText}>
-                  {isApplied(selectedJobForDetails.id) ? 'Application Submitted' : 'Apply Now'}
-                </Text>
-              </Pressable>
-              <Text style={styles.applyNotice}>Your application goes directly to the employer</Text>
-            </View>
-          )}
-        </View>
-      </Modal>
+        job={selectedJobForDetails as any}
+        onClose={() => setSelectedJobForDetails(null)}
+        onApply={(j) => {
+          handleApplyJob(j as any);
+          const targetJob = (selectedJobForDetails || j) as any;
+          if (targetJob) {
+            const jobRole = targetJob.roleTag || targetJob.title || 'Household Service';
+            const jobRate = `${targetJob.price} ${targetJob.unit || ''}`.trim();
+            const jobLocation = targetJob.location || 'Cagayan de Oro';
+            const jobTerm = targetJob.termTag || (targetJob.tags && targetJob.tags[1]) || '';
+            const replySnippet = `${jobRole} • ${jobRate} • ${jobLocation}${jobTerm ? ` • ${jobTerm}` : ''}`;
+            setSelectedJobForDetails(null);
+            setActiveChat({
+              visible: true,
+              partnerId: targetJob.partnerId || targetJob.id,
+              name: targetJob.employerName || 'Homeowner',
+              role: 'Homeowner',
+              avatar: targetJob.avatar || targetJob.image,
+              initialMessage: 'I am interested in this job position',
+              initialReplyTo: {
+                author: 'Job Post',
+                text: replySnippet,
+              },
+            });
+          }
+        }}
+        isApplied={selectedJobForDetails ? isApplied(selectedJobForDetails.id) : false}
+        isSaved={selectedJobForDetails ? isSaved(selectedJobForDetails.id) : false}
+        onToggleSave={(j) => handleToggleSave(j as any)}
+      />
 
       {/* Messenger-style Chat Detail Modal */}
       <ChatDetailScreen
@@ -1149,6 +1103,7 @@ export function JobsScreen({ onViewProfile, token }: { onViewProfile?: () => voi
         contactRole={activeChat.role}
         contactAvatar={activeChat.avatar}
         initialMessage={activeChat.initialMessage}
+        initialReplyTo={activeChat.initialReplyTo}
         userRole="kasambahay"
       />
 

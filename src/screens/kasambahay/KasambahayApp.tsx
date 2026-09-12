@@ -19,7 +19,13 @@ export function KasambahayApp({ avatarUri, onLogout }: { avatarUri?: string | nu
   const renderScreen = () => {
     switch (activeTab) {
       case 'home':
-        return <HomeScreen avatarUri={avatarUri} onAvatarPress={() => setActiveTab('profile')} />;
+        return (
+          <HomeScreen
+            avatarUri={avatarUri}
+            onAvatarPress={() => setActiveTab('profile')}
+            onViewAll={() => setActiveTab('jobs')}
+          />
+        );
       case 'jobs':
         return <JobsScreen />;
       case 'chats':

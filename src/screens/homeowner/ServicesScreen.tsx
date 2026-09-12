@@ -97,6 +97,10 @@ export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?
     role: string;
     avatar: string;
     initialMessage?: string;
+    initialReplyTo?: {
+      author: string;
+      text: string;
+    };
   }>({
     visible: false,
     partnerId: undefined,
@@ -292,6 +296,10 @@ export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?
         online: true,
       });
 
+      const serviceRate = currentWorker.price || '';
+      const serviceLocation = currentWorker.location || 'Cagayan de Oro';
+      const replySnippet = `${badgeRole}${serviceRate ? ` • ${serviceRate}` : ''} • ${serviceLocation}`;
+
       // Directly open ChatDetailScreen modal with auto message!
       setActiveChat({
         visible: true,
@@ -300,6 +308,10 @@ export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?
         role: badgeRole,
         avatar: currentWorker.avatar,
         initialMessage: 'Hi! I am interested in hiring you for a service.',
+        initialReplyTo: {
+          author: 'Job Post',
+          text: replySnippet,
+        },
       });
     } else {
       showCountAnimation('minus');
@@ -740,6 +752,7 @@ export function ServicesScreen({ avatarUri, onViewProfile, token }: { avatarUri?
         contactRole={activeChat.role}
         contactAvatar={activeChat.avatar}
         initialMessage={activeChat.initialMessage}
+        initialReplyTo={activeChat.initialReplyTo}
         userRole="homeowner"
       />
 

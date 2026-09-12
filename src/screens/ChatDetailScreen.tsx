@@ -42,6 +42,107 @@ import { chatStore } from '../store/chatStore';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+export const formatBookingStartDate = (dateStr?: string) => {
+  if (!dateStr) return 'Soon';
+  try {
+    const parts = dateStr.split('/');
+    if (parts.length === 3 && parts[0] && parts[1]) {
+      const m = parseInt(parts[0], 10) - 1;
+      const d = parseInt(parts[1], 10);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${months[m] || 'May'} ${d}`;
+    }
+    const parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${months[parsed.getMonth()]} ${parsed.getDate()}`;
+    }
+  } catch {}
+  return dateStr;
+};
+
+export function parseBookingInfoFromText(
+  cleanText?: string | null,
+  isSender: boolean = false,
+  senderName?: string,
+  contactName?: string
+): NonNullable<ChatMessage['bookingInfo']> | null {
+  if (!cleanText) return null;
+
+  const lower = cleanText.toLowerCase();
+  const isBooking =
+    cleanText.startsWith('[BOOKING') ||
+    lower.includes('booking offer') ||
+    lower.includes('booking ready') ||
+    cleanText.includes('📋 Booking');
+
+  if (!isBooking) return null;
+
+  const defaultPersonName = isSender ? (senderName || 'You') : (contactName || 'Client');
+
+  // Case 1: JSON payload
+  if (cleanText.startsWith('[BOOKING]:') || cleanText.startsWith('[BOOKING_OFFER]:')) {
+    try {
+      const jsonStr = cleanText.replace(/^\[BOOKING(?:_OFFER)?\]:\s*/, '');
+      const data = JSON.parse(jsonStr);
+      return {
+        title: data.title || (data.isConfirmed ? 'BOOKING CONFIRMED' : 'BOOKING READY'),
+        bookedByName: data.bookedByName || defaultPersonName,
+        startDate: data.startDate || '04/27/2026',
+        endDate: data.endDate || '05/27/2026',
+        workHours: data.workHours || '08:00 AM - 05:00 PM',
+        location: data.location || 'Zone 6, Cugman',
+        days: data.days || ['M', 'T', 'W', 'Th', 'F'],
+        salary: data.salary || '6500',
+        bookingType: data.bookingType || 'long_term',
+        jobRole: data.jobRole || 'Household Service',
+        details: data.details || `${data.salary || '6500'} · ${data.workHours || '08:00 AM - 05:00 PM'}`,
+        isConfirmed: !!data.isConfirmed,
+      };
+    } catch (e) {}
+  }
+
+  // Case 2: Human-readable text payload (e.g. 📋 Booking Offer Sent (Long-Term): Yes hello? from 04/27/2026 to 05/27/2026 (₱6500/mo) at Zone 6, Cugman)
+  const dateMatches = cleanText.match(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/g) ||
+                      cleanText.match(/\b\d{4}-\d{2}-\d{2}\b/g);
+  const startDate = dateMatches && dateMatches[0] ? dateMatches[0] : '04/27/2026';
+  const endDate = dateMatches && dateMatches[1] ? dateMatches[1] : '05/27/2026';
+
+  const rateMatch = cleanText.match(/₱\s*([0-9,]+)/i);
+  const salaryClean = rateMatch && rateMatch[1] ? rateMatch[1].replace(/,/g, '') : '6500';
+
+  const isShort = /short[-\s]*term/i.test(cleanText) || /\/day/i.test(cleanText);
+  const bookingType: 'short_term' | 'long_term' = isShort ? 'short_term' : 'long_term';
+  const rateLabel = isShort ? `₱${salaryClean}/day` : `₱${salaryClean}/mo`;
+
+  const locMatch = cleanText.match(/\bat\s+([^(\n\r]+)/i);
+  const location = locMatch && locMatch[1] ? locMatch[1].trim() : 'Zone 6, Cugman';
+
+  let jobRole = 'Household Service';
+  const roleMatch = cleanText.match(/:\s*(.*?)\s+from\s+/is);
+  if (roleMatch && roleMatch[1]) {
+    const rawRole = roleMatch[1].trim();
+    if (!rawRole.toLowerCase().includes('hello') && rawRole.length < 40) {
+      jobRole = rawRole;
+    }
+  }
+
+  return {
+    title: 'BOOKING READY',
+    bookedByName: defaultPersonName,
+    startDate,
+    endDate,
+    workHours: '08:00 AM - 05:00 PM',
+    location,
+    days: ['M', 'T', 'W', 'Th', 'F'],
+    salary: salaryClean,
+    bookingType,
+    jobRole,
+    details: `${rateLabel} · 08:00 AM - 05:00 PM`,
+    isConfirmed: false,
+  };
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'other' | 'me' | 'system';
@@ -57,7 +158,15 @@ export interface ChatMessage {
   avatar?: string;
   bookingInfo?: {
     title: string;
+    bookedByName?: string;
     startDate: string;
+    endDate?: string;
+    workHours?: string;
+    location?: string;
+    days?: string[];
+    salary?: string;
+    bookingType?: 'long_term' | 'short_term';
+    jobRole?: string;
     details: string;
     isConfirmed?: boolean;
   };
@@ -194,6 +303,7 @@ interface ChatDetailScreenProps {
   contactAvatar?: string;
   isOnline?: boolean;
   initialMessage?: string;
+  initialReplyTo?: { author: string; text: string };
   userRole?: 'homeowner' | 'kasambahay';
 }
 
@@ -550,6 +660,10 @@ export function ChatDetailScreen({
       ];
     });
 
+    if (partnerId && effectiveToken) {
+      sendChatMessage(effectiveToken, partnerId, `I have accepted and confirmed the booking request! Thank you po! 😊`).catch(() => {});
+    }
+
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
@@ -593,6 +707,23 @@ export function ChatDetailScreen({
                   };
                   cleanText = replyMatch[3];
                 }
+
+                // Parse structured or text-based booking offer
+                const bookingInfo = parseBookingInfoFromText(
+                  cleanText,
+                  m.is_sender,
+                  user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'You',
+                  contactName
+                );
+
+                if (bookingInfo) {
+                  return {
+                    id: m.chat_message_id,
+                    sender: 'system' as const,
+                    bookingInfo,
+                    time: formatTimeOnly(m.createdAt),
+                  };
+                }
               }
 
               return {
@@ -608,6 +739,20 @@ export function ChatDetailScreen({
               };
             });
 
+            // If partner or user accepted the booking, update prior booking cards to Confirmed & Active
+            const hasConfirmationMessage = visibleItems.some((m) => {
+              const text = m.message_payload || '';
+              return text.includes('agreed and accepted') || text.includes('accepted and confirmed');
+            });
+            if (hasConfirmationMessage) {
+              mapped.forEach((msg) => {
+                if (msg.bookingInfo) {
+                  msg.bookingInfo.isConfirmed = true;
+                  msg.bookingInfo.title = 'BOOKING CONFIRMED';
+                }
+              });
+            }
+
             setMessages((prev) => {
               const hasChanged =
                 prev.length !== mapped.length ||
@@ -615,6 +760,9 @@ export function ChatDetailScreen({
                   const m = mapped[idx];
                   if (!m) return true;
                   if (msg.id !== m.id) return true;
+                  if (msg.sender !== m.sender) return true;
+                  if (!!msg.bookingInfo !== !!m.bookingInfo) return true;
+                  if (msg.bookingInfo?.isConfirmed !== m.bookingInfo?.isConfirmed) return true;
                   if (msg.reaction !== m.reaction) return true;
                   if (msg.imageUri !== m.imageUri) return true;
                   if (msg.text !== m.text) return true;
@@ -740,13 +888,27 @@ export function ChatDetailScreen({
       ? `> [${currentReply.author}]: ${currentReply.text}\n\n${trimmed}`
       : trimmed;
 
-    const newMessage: ChatMessage = {
-      id: tempId,
-      sender: 'me',
-      text: trimmed,
-      replyTo: currentReply ? { author: currentReply.author, text: currentReply.text } : undefined,
-      time: timeString,
-    };
+    const bookingInfo = parseBookingInfoFromText(
+      trimmed,
+      true,
+      user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'You',
+      contactName
+    );
+
+    const newMessage: ChatMessage = bookingInfo
+      ? {
+          id: tempId,
+          sender: 'system',
+          bookingInfo,
+          time: timeString,
+        }
+      : {
+          id: tempId,
+          sender: 'me',
+          text: trimmed,
+          replyTo: currentReply ? { author: currentReply.author, text: currentReply.text } : undefined,
+          time: timeString,
+        };
 
     setMessages((prev) => {
       const nonTyping = prev.filter((m) => !m.isTyping);
@@ -1096,48 +1258,100 @@ export function ChatDetailScreen({
             {messages.map((item, index) => {
               if (item.sender === 'system' && item.bookingInfo) {
                 const isConfirmed = item.bookingInfo.isConfirmed || item.bookingInfo.title === 'BOOKING CONFIRMED';
+                const bookedPersonName =
+                  item.bookingInfo.bookedByName ||
+                  (isKasambahay
+                    ? contactName
+                    : (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : contactName));
+                const formattedStartDate = formatBookingStartDate(item.bookingInfo.startDate);
 
                 return (
-                  <Pressable
-                    key={item.id}
-                    style={styles.systemCardContainer}
-                    onPress={() => {
-                      setActiveBookingMsgId(item.id);
-                      setActiveBookingDetails({
-                        startDate: item.bookingInfo?.startDate,
-                        workHours: item.bookingInfo?.details.split('·')[1]?.trim() || '08:00 AM - 05:00 PM',
-                        salary: item.bookingInfo?.details.split('·')[0]?.trim() || '5000',
-                        location: 'Lower Tambo Macasandig, Blk 5',
-                        days: ['M', 'T', 'W', 'Th', 'F'],
-                        scope: ['cooking', 'laundry', 'caregiver'],
-                      });
-                      setBookingReadOnly(true);
-                      setBookingModalVisible(true);
-                    }}
-                  >
-                    <View style={[styles.bookingCard, isConfirmed && styles.bookingCardConfirmed]}>
-                      <View style={styles.bookingTagRow}>
+                  <View key={item.id} style={styles.systemCardContainer}>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.compactBookingCard,
+                        isConfirmed && styles.compactBookingCardConfirmed,
+                        pressed && styles.compactBookingCardPressed,
+                      ]}
+                      onPress={() => {
+                        setActiveBookingMsgId(item.id);
+                        setActiveBookingDetails({
+                          startDate: item.bookingInfo?.startDate,
+                          endDate: item.bookingInfo?.endDate || '05/27/2026',
+                          workHours:
+                            item.bookingInfo?.workHours ||
+                            item.bookingInfo?.details?.split('·')[1]?.trim() ||
+                            '08:00 AM - 05:00 PM',
+                          salary:
+                            item.bookingInfo?.salary ||
+                            item.bookingInfo?.details?.split('·')[0]?.replace(/[^0-9.]/g, '') ||
+                            '6500',
+                          location: item.bookingInfo?.location || 'Zone 6, Cugman',
+                          days: item.bookingInfo?.days || ['M', 'T', 'W', 'Th', 'F'],
+                          bookingType: item.bookingInfo?.bookingType || 'long_term',
+                          jobPost: undefined,
+                        });
+                        setBookingReadOnly(true);
+                        setBookingModalVisible(true);
+                      }}
+                    >
+                      {/* Round Orange / Emerald Document Icon Badge */}
+                      <View
+                        style={[
+                          styles.compactBookingIconBadge,
+                          isConfirmed && styles.compactBookingIconBadgeConfirmed,
+                        ]}
+                      >
                         <Ionicons
-                          name={isConfirmed ? "checkmark-circle" : "time-outline"}
-                          size={16}
-                          color={isConfirmed ? "#4CAF50" : "#FFA51F"}
+                          name={isConfirmed ? 'checkmark-sharp' : 'document-text'}
+                          size={20}
+                          color="#FFFFFF"
                         />
-                        <Text style={[styles.bookingTagText, isConfirmed && styles.bookingTagTextConfirmed]}>
-                          {isConfirmed ? 'BOOKING CONFIRMED' : 'BOOKING READY'}
+                      </View>
+
+                      {/* Title and Subtitle Info */}
+                      <View style={styles.compactBookingInfoCol}>
+                        <View style={styles.compactBookingTitleRow}>
+                          <Text style={styles.compactBookingTitle} numberOfLines={1}>
+                            {bookedPersonName}
+                          </Text>
+                          {isConfirmed ? (
+                            <View style={styles.confirmedMicroBadge}>
+                              <Text style={styles.confirmedMicroBadgeText}>Active</Text>
+                            </View>
+                          ) : null}
+                        </View>
+
+                        <Text style={styles.compactBookingSubText} numberOfLines={1}>
+                          {`Start date: ${formattedStartDate} • Tap to review`}
                         </Text>
                       </View>
-                      <Text style={styles.bookingStartTitle}>Start: {item.bookingInfo.startDate}</Text>
-                      <Text style={styles.bookingDetails}>{item.bookingInfo.details}</Text>
 
-                      {isConfirmed && (
-                        <View style={styles.confirmedStatusTag}>
-                          <Ionicons name="checkmark-done-circle" size={16} color="#4CAF50" style={{ marginRight: 4 }} />
-                          <Text style={styles.confirmedStatusText}>Confirmed & Active</Text>
-                        </View>
-                      )}
-                    </View>
+                      {/* Right Chevron Arrow */}
+                      <View style={styles.compactBookingArrowWrap}>
+                        <Ionicons name="chevron-forward" size={19} color="#8E8E93" />
+                      </View>
+                    </Pressable>
+
+                    {/* Quick Kasambahay Action if not confirmed yet */}
+                    {!isConfirmed ? (
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.compactQuickAgreeBtn,
+                          pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+                        ]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleKasambahayConfirm(item.id);
+                        }}
+                      >
+                        <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.compactQuickAgreeText}>Agree & Accept Booking</Text>
+                      </Pressable>
+                    ) : null}
+
                     <Text style={styles.systemTimeText}>{item.time}</Text>
-                  </Pressable>
+                  </View>
                 );
               }
 
@@ -1476,6 +1690,12 @@ export function ChatDetailScreen({
           const minutes = now.getMinutes().toString().padStart(2, '0');
           const ampm = hours >= 12 ? 'PM' : 'AM';
           const timeString = `${hours % 12 || 12}:${minutes} ${ampm}`;
+          const senderName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'You';
+          const termLabel = details.bookingType === 'short_term' ? 'Short-Term' : 'Long-Term';
+          const rateLabel = details.bookingType === 'short_term' ? `₱${details.salary}/day` : `₱${details.salary}/mo`;
+
+          const bookingText = `📋 Booking Offer Sent (${termLabel}): Household Service from ${details.startDate} to ${details.endDate} (${rateLabel}) at ${details.location}`;
+
           setMessages((prev) => [
             ...prev,
             {
@@ -1484,12 +1704,24 @@ export function ChatDetailScreen({
               time: timeString,
               bookingInfo: {
                 title: 'BOOKING READY',
+                bookedByName: senderName,
                 startDate: details.startDate,
-                details: `${details.salary}/mo · ${details.workHours}`,
+                endDate: details.endDate,
+                workHours: details.workHours,
+                location: details.location,
+                days: details.days,
+                salary: details.salary,
+                bookingType: details.bookingType,
+                details: `${rateLabel} · ${details.workHours}`,
                 isConfirmed: false,
               },
             },
           ]);
+
+          if (partnerId && effectiveToken) {
+            sendChatMessage(effectiveToken, partnerId, bookingText).catch(() => {});
+          }
+
           setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
         }}
         onKasambahayConfirm={() => {
@@ -1999,9 +2231,101 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   systemCardContainer: {
-    alignSelf: 'flex-end',
-    width: '82%',
-    marginBottom: 12,
+    width: '100%',
+    paddingHorizontal: 8,
+    marginVertical: 6,
+    alignItems: 'stretch',
+  },
+  compactBookingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#ECECEC',
+  },
+  compactBookingCardConfirmed: {
+    backgroundColor: '#F7FEFA',
+    borderColor: '#D1FAE5',
+  },
+  compactBookingCardPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.985 }],
+  },
+  compactBookingIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E67E22',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactBookingIconBadgeConfirmed: {
+    backgroundColor: '#10B981',
+  },
+  compactBookingInfoCol: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 6,
+    justifyContent: 'center',
+  },
+  compactBookingTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  compactBookingTitle: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  confirmedMicroBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  confirmedMicroBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  compactBookingSubText: {
+    fontSize: 12.5,
+    color: '#64748B',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  compactBookingArrowWrap: {
+    paddingLeft: 4,
+  },
+  compactQuickAgreeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#00875A',
+    borderRadius: 22,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    shadowColor: '#00875A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  compactQuickAgreeText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13.5,
   },
   bookingCard: {
     backgroundColor: '#FFFBF2',

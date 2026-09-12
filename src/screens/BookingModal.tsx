@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,12 +8,37 @@ import {
   Pressable,
   Modal,
   Alert,
+  Animated,
+  Dimensions,
+  ScrollView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchMinimumWage, MinimumWageData } from '../api/bookingApi';
+import THEME from '../config/theme';
 
 const logoSource = require('../../assets/serbisure-logo.png');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+export interface BookingJobPost {
+  role?: string;
+  rate?: string;
+  location?: string;
+  extra?: string;
+  rawText?: string;
+}
+
+export interface BookingConfirmData {
+  startDate: string;
+  endDate: string;
+  workHours: string;
+  location: string;
+  days: string[];
+  salary: string;
+  bookingType: 'long_term' | 'short_term';
+  jobPost?: BookingJobPost | null;
+}
 
 interface BookingModalProps {
   visible: boolean;
@@ -26,6 +51,7 @@ interface BookingModalProps {
   userRole?: 'homeowner' | 'kasambahay';
   token?: string | null;
   bookingType?: 'long_term' | 'short_term';
+  jobPost?: BookingJobPost | null;
   initialDetails?: {
     startDate?: string;
     endDate?: string;
@@ -33,17 +59,10 @@ interface BookingModalProps {
     location?: string;
     days?: string[];
     salary?: string;
-    scope?: Record<string, boolean> | string[];
+    bookingType?: 'long_term' | 'short_term';
+    jobPost?: BookingJobPost | null;
   } | null;
-  onConfirm?: (bookingDetails: {
-    startDate: string;
-    endDate: string;
-    workHours: string;
-    location: string;
-    days: string[];
-    salary: string;
-    scope: string[];
-  }) => void;
+  onConfirm?: (bookingDetails: BookingConfirmData) => void;
   onKasambahayConfirm?: () => void;
 }
 
@@ -54,74 +73,141 @@ const MONTH_NAMES = [
 ];
 const WEEKDAY_HEADER = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
+function computeDurationDays(startStr: string, endStr: string): string {
+  try {
+    const s = new Date(startStr);
+    const e = new Date(endStr);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return '';
+    const diff = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff < 0) return 'Invalid range';
+    if (diff === 0) return '1 Day';
+    if (diff >= 28 && diff <= 32) return '1 Month (Approx)';
+    if (diff > 32 && diff % 30 < 5) return `${Math.round(diff / 30)} Months`;
+    return `${diff} Days`;
+  } catch {
+    return '';
+  }
+}
+
 export function BookingModal({
   visible,
   onClose,
-  contactName = 'Vicente Ganda',
-  contactRole = 'Cleaner',
+  contactName = 'Kasambahay',
+  contactRole = 'Household Helper',
   contactAvatar = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300',
   readOnly = false,
   isConfirmed = false,
   userRole = 'homeowner',
   token,
   bookingType = 'long_term',
+  jobPost = null,
   initialDetails = null,
   onConfirm,
   onKasambahayConfirm,
 }: BookingModalProps) {
   const insets = useSafeAreaInsets();
 
+  // Slide animation: Right to Left
+  const [modalVisible, setModalVisible] = useState(visible);
+  const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+
+  // Form states
   const [startDate, setStartDate] = useState('04/27/2026');
   const [endDate, setEndDate] = useState('05/27/2026');
   const [workHours, setWorkHours] = useState('08:00 AM - 05:00 PM');
   const [location, setLocation] = useState('');
   const [selectedDays, setSelectedDays] = useState<string[]>(['M', 'T', 'W', 'Th', 'F']);
   const [salary, setSalary] = useState('5000');
+  const [selectedBookingType, setSelectedBookingType] = useState<'long_term' | 'short_term'>('long_term');
   const [minWageInfo, setMinWageInfo] = useState<MinimumWageData | null>(null);
-  const [scope, setScope] = useState<Record<string, boolean>>({
-    cooking: true,
-    laundry: true,
-    cleaning: false,
-    childCare: false,
-    caregiver: true,
-    allAround: false,
-  });
 
+  // Active Job Post reference
+  const effectiveJobPost = useMemo(() => {
+    return initialDetails?.jobPost || jobPost;
+  }, [initialDetails?.jobPost, jobPost]);
+
+  // Open / Close animation effect
   useEffect(() => {
-    if (visible && initialDetails) {
+    if (visible) {
+      setModalVisible(true);
+      slideAnim.setValue(SCREEN_WIDTH);
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        damping: 26,
+        mass: 0.85,
+        stiffness: 240,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible, slideAnim]);
+
+  const handleClose = () => {
+    Animated.timing(slideAnim, {
+      toValue: SCREEN_WIDTH,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setModalVisible(false);
+      onClose();
+    });
+  };
+
+  // Sync initial details and auto-fill from referenced job post
+  useEffect(() => {
+    if (!visible) return;
+
+    // Detect booking type preference (short-term vs long-term)
+    const isShortTermFromJob =
+      effectiveJobPost?.extra?.toLowerCase().includes('part') ||
+      effectiveJobPost?.rate?.toLowerCase().includes('day') ||
+      effectiveJobPost?.extra?.toLowerCase().includes('short') ||
+      bookingType === 'short_term';
+
+    const defaultType = initialDetails?.bookingType || (isShortTermFromJob ? 'short_term' : 'long_term');
+    setSelectedBookingType(defaultType);
+
+    if (initialDetails) {
       if (initialDetails.startDate) setStartDate(initialDetails.startDate);
       if (initialDetails.endDate) setEndDate(initialDetails.endDate);
       if (initialDetails.workHours) setWorkHours(initialDetails.workHours);
-      if (initialDetails.location !== undefined) {
-        setLocation(initialDetails.location || 'Lower Tambo Macasandig, Blk 5');
-      }
+      if (initialDetails.location) setLocation(initialDetails.location);
+      else if (effectiveJobPost?.location) setLocation(effectiveJobPost.location);
+      else setLocation('Zone 6, Cugman');
       if (initialDetails.days) setSelectedDays(initialDetails.days);
-      if (initialDetails.salary) setSalary(initialDetails.salary.replace(/[^0-9]/g, ''));
-      if (initialDetails.scope) {
-        if (Array.isArray(initialDetails.scope)) {
-          const map: Record<string, boolean> = {
-            cooking: false, laundry: false, cleaning: false, childCare: false, caregiver: false, allAround: false
-          };
-          initialDetails.scope.forEach((k) => { map[k] = true; });
-          setScope(map);
-        } else {
-          setScope(initialDetails.scope);
-        }
+      if (initialDetails.salary) setSalary(initialDetails.salary.replace(/[^0-9.]/g, ''));
+      else if (effectiveJobPost?.rate) {
+        const digits = effectiveJobPost.rate.replace(/[^0-9.]/g, '');
+        if (digits) setSalary(digits);
       }
-    } else if (visible && !readOnly) {
-      setLocation('');
-    }
-  }, [visible, initialDetails, readOnly]);
+    } else {
+      // Auto-fill from job post!
+      const defaultLocation = effectiveJobPost?.location || 'Zone 6, Cugman';
+      setLocation(defaultLocation);
 
+      if (effectiveJobPost?.rate) {
+        const digits = effectiveJobPost.rate.replace(/[^0-9.]/g, '');
+        setSalary(digits || (defaultType === 'short_term' ? '600' : '6500'));
+      } else {
+        setSalary(defaultType === 'short_term' ? '600' : '6500');
+      }
+
+      setStartDate('04/27/2026');
+      setEndDate(defaultType === 'short_term' ? '05/04/2026' : '05/27/2026');
+      setWorkHours('08:00 AM - 05:00 PM');
+      setSelectedDays(['M', 'T', 'W', 'Th', 'F']);
+    }
+  }, [visible, initialDetails, effectiveJobPost, bookingType]);
+
+  // Minimum wage query for long term
   useEffect(() => {
-    if (visible && bookingType === 'long_term') {
+    if (visible && selectedBookingType === 'long_term') {
       fetchMinimumWage(token || undefined, 'long_term', location)
         .then((data) => {
           if (data) setMinWageInfo(data);
         })
         .catch(() => {});
     }
-  }, [visible, bookingType, location, token]);
+  }, [visible, selectedBookingType, location, token]);
 
   // Date Picker Modal State
   const [datePickerTarget, setDatePickerTarget] = useState<'start' | 'end' | null>(null);
@@ -144,41 +230,51 @@ export function BookingModal({
     );
   };
 
-  const toggleScope = (key: string) => {
-    if (readOnly) return;
-    setScope((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
   const handleConfirm = () => {
+    if (!startDate || !endDate) {
+      Alert.alert('Missing Dates', 'Please select both start and end dates.');
+      return;
+    }
     if (!location.trim()) {
-      Alert.alert('Location Required', 'Please enter a work location to confirm booking.');
+      Alert.alert('Missing Location', 'Please provide the service location.');
+      return;
+    }
+    if (!salary.trim()) {
+      Alert.alert('Missing Salary', 'Please provide the rate/salary.');
       return;
     }
 
-    if (bookingType === 'long_term' && isBelowMinWage) {
-      Alert.alert(
-        'Below Minimum Wage',
-        `The monthly salary must be at least ₱${effectiveMinMonthly.toLocaleString()} (approx. ₱${effectiveMinDaily.toFixed(2)}/day) as mandated by ${minWageInfo?.wage_order || 'Batas Kasambahay (RA 10361)'}.`,
-        [{ text: 'OK' }]
-      );
-      return;
+    const salaryVal = parseFloat(salary.replace(/[^0-9.]/g, '')) || 0;
+    if (selectedBookingType === 'short_term') {
+      if (salaryVal < 600) {
+        Alert.alert(
+          'Minimum Daily Rate',
+          'The rate cannot be below ₱600/day on a short-term basis.'
+        );
+        return;
+      }
+    } else {
+      if (salaryVal < 6500) {
+        Alert.alert(
+          'Minimum Monthly Salary',
+          'Under Batas Kasambahay (RA 10361), the monthly salary cannot be below ₱6,500/month.'
+        );
+        return;
+      }
     }
 
-    const selectedScopeKeys = Object.keys(scope).filter((k) => scope[k]);
     onConfirm?.({
       startDate,
       endDate,
       workHours,
-      location,
+      location: location.trim(),
       days: selectedDays,
-      salary: `P ${salary}`,
-      scope: selectedScopeKeys,
+      salary: salary.trim(),
+      bookingType: selectedBookingType,
+      jobPost: effectiveJobPost,
     });
-    Alert.alert(
-      'Booking Request Sent',
-      `Your booking request for ${contactName} has been submitted!`,
-      [{ text: 'OK', onPress: onClose }]
-    );
+
+    handleClose();
   };
 
   // Calendar Date Picker Helpers
@@ -204,252 +300,323 @@ export function BookingModal({
     setShowTimePicker(false);
   };
 
-  const salaryNum = parseInt(salary, 10) || 0;
-  const effectiveMinDaily = minWageInfo?.min_daily_rate ? parseFloat(minWageInfo.min_daily_rate) : 250;
-  const effectiveMinMonthly = minWageInfo?.min_monthly_rate ? parseFloat(minWageInfo.min_monthly_rate) : 6500;
-  const isBelowMinWage = bookingType === 'long_term' && salaryNum > 0 && salaryNum < effectiveMinMonthly;
+  const salaryNum = parseFloat(salary.replace(/[^0-9.]/g, '')) || 0;
+  const effectiveMinDaily = 600;
+  const effectiveMinMonthly = minWageInfo?.min_monthly_rate ? Math.max(6500, parseFloat(minWageInfo.min_monthly_rate)) : 6500;
+  const isBelowMinWage =
+    salaryNum > 0 &&
+    (selectedBookingType === 'short_term'
+      ? salaryNum < effectiveMinDaily
+      : salaryNum < effectiveMinMonthly);
+  const durationText = computeDurationDays(startDate, endDate);
+
+  const isKasambahayUser = userRole === 'kasambahay';
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent onRequestClose={onClose}>
-      <View style={[styles.container, { paddingTop: Math.max(insets.top, 12), paddingBottom: Math.max(insets.bottom, 12) }]}>
-        {/* Global Aligned Header */}
+    <Modal
+      visible={modalVisible}
+      animationType="none"
+      transparent
+      statusBarTranslucent
+      onRequestClose={handleClose}
+    >
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            transform: [{ translateX: slideAnim }],
+            paddingTop: Math.max(insets.top, 14),
+            paddingBottom: Math.max(insets.bottom, 14),
+          },
+        ]}
+      >
+        {/* Global Aligned Header Matching Chat Screen */}
         <View style={styles.header}>
-          <View style={styles.headerSide}>
-            <Pressable onPress={onClose} hitSlop={10}>
-              <Ionicons name="arrow-back" size={26} color="#2A2925" />
-            </Pressable>
+          <Pressable onPress={handleClose} style={styles.backBtn} hitSlop={12}>
+            <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
+          </Pressable>
+
+          <View style={styles.headerTitleCenter}>
+            <Text style={styles.headerTitle}>{readOnly ? 'Booking Details' : 'Booking Offer'}</Text>
           </View>
 
-          <Text style={styles.headerTitle}>{readOnly ? 'Booking Details' : 'Booking'}</Text>
-
-          <View style={[styles.headerSide, styles.headerSideRight]}>
+          <View style={styles.headerRight}>
             <Image source={logoSource} style={styles.logo} resizeMode="contain" />
           </View>
         </View>
 
-        {/* Content Container - Compact & Non-Scrolling */}
-        <View style={styles.contentBody}>
-          {/* Worker Info Summary */}
+        {/* Scrollable Form Content */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Worker Info Card */}
           <View style={styles.workerCard}>
             <Image source={{ uri: contactAvatar }} style={styles.workerAvatar} />
             <View style={styles.workerTextCol}>
               <View style={styles.workerNameRow}>
                 <Text style={styles.workerName}>{contactName}</Text>
                 <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginLeft: 4 }} />
-                <View style={styles.longTermTag}>
-                  <Text style={styles.longTermText}>Long-Term</Text>
-                </View>
               </View>
 
               <View style={styles.workerSubRow}>
-                <Text style={styles.kasambahayText}>Kasambahay</Text>
-                <View style={styles.cleanerTag}>
-                  <Text style={styles.cleanerTagText}>{contactRole}</Text>
+                <Text style={styles.kasambahaySub}>{contactRole || 'Kasambahay'}</Text>
+                <Text style={styles.metaDot}>•</Text>
+                <View
+                  style={[
+                    styles.termBadgeSmall,
+                    selectedBookingType === 'short_term' ? styles.termBadgeShort : styles.termBadgeLong,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.termBadgeSmallText,
+                      selectedBookingType === 'short_term' ? styles.termBadgeShortText : styles.termBadgeLongText,
+                    ]}
+                  >
+                    {selectedBookingType === 'short_term' ? 'Short-Term' : 'Long-Term'}
+                  </Text>
                 </View>
               </View>
             </View>
           </View>
 
-          {/* Form Fields */}
-          <View style={styles.formSection}>
-            {/* START DATE */}
-            <View style={styles.formGroup}>
-              <Text style={styles.fieldLabel}>START DATE</Text>
+          {/* CONTRACT DURATION SELECTOR / HIGHLIGHT */}
+          <View style={styles.formGroup}>
+            <Text style={styles.fieldLabel}>CONTRACT TYPE</Text>
+            {readOnly ? (
+              <View
+                style={[
+                  styles.termReadonlyCard,
+                  selectedBookingType === 'short_term' ? styles.termReadonlyShort : styles.termReadonlyLong,
+                ]}
+              >
+                <Ionicons
+                  name={selectedBookingType === 'short_term' ? 'sunny' : 'business'}
+                  size={18}
+                  color={selectedBookingType === 'short_term' ? '#D97706' : '#2563EB'}
+                />
+                <View style={{ marginLeft: 10, flex: 1 }}>
+                  <Text style={styles.termReadonlyTitle}>
+                    {selectedBookingType === 'short_term' ? 'Short-Term' : 'Long-Term'}
+                  </Text>
+                  <Text style={styles.termReadonlySub}>
+                    {selectedBookingType === 'short_term'
+                      ? 'Flexible daily or project-based household service'
+                      : 'Regular monthly domestic arrangement'}
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.typeSelectorRow}>
+                <Pressable
+                  style={[
+                    styles.typePill,
+                    selectedBookingType === 'short_term' ? styles.typePillActive : styles.typePillInactive,
+                  ]}
+                  onPress={() => {
+                    setSelectedBookingType('short_term');
+                    const num = parseFloat(salary.replace(/[^0-9.]/g, '')) || 0;
+                    if (num >= 5000 || num < 600) {
+                      setSalary('600');
+                    }
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.typePillText,
+                      selectedBookingType === 'short_term' ? styles.typePillTextActive : styles.typePillTextInactive,
+                    ]}
+                  >
+                    Short-Term
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.typePill,
+                    selectedBookingType === 'long_term' ? styles.typePillActive : styles.typePillInactive,
+                  ]}
+                  onPress={() => {
+                    setSelectedBookingType('long_term');
+                    const num = parseFloat(salary.replace(/[^0-9.]/g, '')) || 0;
+                    if (num < 6500) {
+                      setSalary('6500');
+                    }
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.typePillText,
+                      selectedBookingType === 'long_term' ? styles.typePillTextActive : styles.typePillTextInactive,
+                    ]}
+                  >
+                    Long-Term
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+
+          {/* UNIFIED START DATE TO END DATE */}
+          <View style={styles.formGroup}>
+            <View style={styles.labelRowWithDuration}>
+              <Text style={styles.fieldLabel}>START DATE TO END DATE</Text>
+              {durationText ? (
+                <View style={styles.durationBadge}>
+                  <Ionicons name="calendar-outline" size={12} color="#D97706" style={{ marginRight: 4 }} />
+                  <Text style={styles.durationBadgeText}>{durationText}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.dateRangeCard}>
+              {/* Start Date Box */}
               <Pressable
-                style={styles.inputBox}
+                style={styles.dateRangeBox}
                 onPress={() => !readOnly && setDatePickerTarget('start')}
                 disabled={readOnly}
               >
-                <TextInput
-                  style={styles.inputText}
-                  value={startDate}
-                  onChangeText={setStartDate}
-                  editable={!readOnly}
-                  placeholder="MM/DD/YYYY"
-                  placeholderTextColor="#999"
-                />
-                <Ionicons name="calendar" size={18} color="#FFB43B" />
+                <Text style={styles.dateRangeSubLabel}>START</Text>
+                <View style={styles.dateValueRow}>
+                  <Ionicons name="calendar" size={16} color="#FFA51F" style={{ marginRight: 6 }} />
+                  <Text style={styles.dateValueText}>{startDate || 'MM/DD/YYYY'}</Text>
+                </View>
               </Pressable>
-            </View>
 
-            {/* END DATE */}
-            <View style={styles.formGroup}>
-              <Text style={styles.fieldLabel}>END DATE</Text>
+              {/* Arrow Connector */}
+              <View style={styles.dateArrowContainer}>
+                <Ionicons name="arrow-forward" size={18} color="#9CA3AF" />
+              </View>
+
+              {/* End Date Box */}
               <Pressable
-                style={styles.inputBox}
+                style={styles.dateRangeBox}
                 onPress={() => !readOnly && setDatePickerTarget('end')}
                 disabled={readOnly}
               >
-                <TextInput
-                  style={styles.inputText}
-                  value={endDate}
-                  onChangeText={setEndDate}
-                  editable={!readOnly}
-                  placeholder="MM/DD/YYYY"
-                  placeholderTextColor="#999"
-                />
-                <Ionicons name="calendar" size={18} color="#FFB43B" />
-              </Pressable>
-            </View>
-
-            {/* WORK HOURS */}
-            <View style={styles.formGroup}>
-              <Text style={styles.fieldLabel}>WORK HOURS</Text>
-              <Pressable
-                style={styles.inputBox}
-                onPress={() => !readOnly && setShowTimePicker(true)}
-                disabled={readOnly}
-              >
-                <TextInput
-                  style={styles.inputText}
-                  value={workHours}
-                  onChangeText={setWorkHours}
-                  editable={!readOnly}
-                  placeholder="e.g. 08:00 AM - 05:00 PM"
-                  placeholderTextColor="#999"
-                />
-                <Ionicons name="time" size={18} color="#FFB43B" />
-              </Pressable>
-            </View>
-
-            {/* LOCATION */}
-            <View style={styles.formGroup}>
-              <Text style={styles.fieldLabel}>LOCATION</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  style={styles.inputText}
-                  value={location}
-                  onChangeText={setLocation}
-                  editable={!readOnly}
-                  placeholder="Enter location..."
-                  placeholderTextColor="#999"
-                />
-                <Ionicons name="location" size={18} color="#FFB43B" />
-              </View>
-            </View>
-
-            {/* WORK SCHEDULE */}
-            <View style={styles.formGroup}>
-              <Text style={styles.fieldLabel}>WORK SCHEDULE</Text>
-              <View style={styles.daysRow}>
-                {ALL_DAYS.map((day) => {
-                  const isSelected = selectedDays.includes(day);
-                  return (
-                    <Pressable
-                      key={day}
-                      disabled={readOnly}
-                      style={[styles.dayPill, isSelected ? styles.dayPillSelected : styles.dayPillUnselected]}
-                      onPress={() => toggleDay(day)}
-                    >
-                      <Text style={[styles.dayText, isSelected ? styles.dayTextSelected : styles.dayTextUnselected]}>
-                        {day}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* MONTH SALARY */}
-            <View style={styles.formGroup}>
-              <Text style={styles.fieldLabel}>MONTH SALARY</Text>
-              <View style={styles.inputBox}>
-                <Text style={styles.currencyPrefix}>P </Text>
-                <TextInput
-                  style={[styles.inputText, { flex: 1 }]}
-                  value={salary}
-                  onChangeText={setSalary}
-                  editable={!readOnly}
-                  keyboardType="numeric"
-                  placeholder="5000"
-                  placeholderTextColor="#999"
-                />
-              </View>
-              {isBelowMinWage && (
-                <Text style={styles.warningText}>
-                  {minWageInfo?.description || `Salary is below statutory minimum wage of ₱${effectiveMinMonthly.toLocaleString()}/month under Batas Kasambahay (RA 10361).`}
-                </Text>
-              )}
-            </View>
-
-            {/* SCOPE OF WORK */}
-            <View style={styles.formGroup}>
-              <Text style={styles.fieldLabel}>SCOPE OF WORK</Text>
-              <View style={styles.scopeGrid}>
-                {/* Column 1 */}
-                <View style={styles.scopeCol}>
-                  <Pressable style={styles.checkboxRow} disabled={readOnly} onPress={() => toggleScope('cooking')}>
-                    <Ionicons
-                      name={scope.cooking ? 'checkbox' : 'square-outline'}
-                      size={18}
-                      color={scope.cooking ? '#FFB43B' : '#555'}
-                    />
-                    <Text style={styles.checkboxLabel}>Cooking</Text>
-                  </Pressable>
-
-                  <Pressable style={styles.checkboxRow} disabled={readOnly} onPress={() => toggleScope('cleaning')}>
-                    <Ionicons
-                      name={scope.cleaning ? 'checkbox' : 'square-outline'}
-                      size={18}
-                      color={scope.cleaning ? '#FFB43B' : '#555'}
-                    />
-                    <Text style={styles.checkboxLabel}>Cleaning</Text>
-                  </Pressable>
-
-                  <Pressable style={styles.checkboxRow} disabled={readOnly} onPress={() => toggleScope('caregiver')}>
-                    <Ionicons
-                      name={scope.caregiver ? 'checkbox' : 'square-outline'}
-                      size={18}
-                      color={scope.caregiver ? '#FFB43B' : '#555'}
-                    />
-                    <Text style={styles.checkboxLabel}>Caregiver</Text>
-                  </Pressable>
+                <Text style={styles.dateRangeSubLabel}>END</Text>
+                <View style={styles.dateValueRow}>
+                  <Ionicons name="calendar" size={16} color="#FFA51F" style={{ marginRight: 6 }} />
+                  <Text style={styles.dateValueText}>{endDate || 'MM/DD/YYYY'}</Text>
                 </View>
-
-                {/* Column 2 */}
-                <View style={styles.scopeCol}>
-                  <Pressable style={styles.checkboxRow} disabled={readOnly} onPress={() => toggleScope('laundry')}>
-                    <Ionicons
-                      name={scope.laundry ? 'checkbox' : 'square-outline'}
-                      size={18}
-                      color={scope.laundry ? '#FFB43B' : '#555'}
-                    />
-                    <Text style={styles.checkboxLabel}>Laundry</Text>
-                  </Pressable>
-
-                  <Pressable style={styles.checkboxRow} disabled={readOnly} onPress={() => toggleScope('childCare')}>
-                    <Ionicons
-                      name={scope.childCare ? 'checkbox' : 'square-outline'}
-                      size={18}
-                      color={scope.childCare ? '#FFB43B' : '#555'}
-                    />
-                    <Text style={styles.checkboxLabel}>Child Care</Text>
-                  </Pressable>
-
-                  <Pressable style={styles.checkboxRow} disabled={readOnly} onPress={() => toggleScope('allAround')}>
-                    <Ionicons
-                      name={scope.allAround ? 'checkbox' : 'square-outline'}
-                      size={18}
-                      color={scope.allAround ? '#FFB43B' : '#555'}
-                    />
-                    <Text style={styles.checkboxLabel}>All Around</Text>
-                  </Pressable>
-                </View>
-              </View>
+              </Pressable>
             </View>
           </View>
 
-          {/* Action Buttons */}
+          {/* WORK HOURS */}
+          <View style={styles.formGroup}>
+            <Text style={styles.fieldLabel}>WORK HOURS</Text>
+            <Pressable
+              style={styles.inputBox}
+              onPress={() => !readOnly && setShowTimePicker(true)}
+              disabled={readOnly}
+            >
+              <Ionicons name="time" size={18} color="#FFA51F" style={{ marginRight: 8 }} />
+              <TextInput
+                style={[styles.inputText, { flex: 1 }]}
+                value={workHours}
+                onChangeText={setWorkHours}
+                editable={!readOnly}
+                placeholder="e.g. 08:00 AM - 05:00 PM"
+                placeholderTextColor="#999"
+              />
+            </Pressable>
+          </View>
+
+          {/* LOCATION (Auto-filled from job post) */}
+          <View style={styles.formGroup}>
+            <View style={styles.labelRowWithDuration}>
+              <Text style={styles.fieldLabel}>LOCATION</Text>
+              {effectiveJobPost?.location ? (
+                <Text style={styles.autoFilledHint}>Auto-filled from job</Text>
+              ) : null}
+            </View>
+            <View style={styles.inputBox}>
+              <Ionicons name="location" size={18} color="#FFA51F" style={{ marginRight: 8 }} />
+              <TextInput
+                style={[styles.inputText, { flex: 1 }]}
+                value={location}
+                onChangeText={setLocation}
+                editable={!readOnly}
+                placeholder="Enter street, barangay, or city..."
+                placeholderTextColor="#999"
+              />
+            </View>
+          </View>
+
+          {/* WORK SCHEDULE */}
+          <View style={styles.formGroup}>
+            <Text style={styles.fieldLabel}>WORK SCHEDULE (DAYS)</Text>
+            <View style={styles.daysRow}>
+              {ALL_DAYS.map((day) => {
+                const isSelected = selectedDays.includes(day);
+                return (
+                  <Pressable
+                    key={day}
+                    disabled={readOnly}
+                    style={[styles.dayPill, isSelected ? styles.dayPillSelected : styles.dayPillUnselected]}
+                    onPress={() => toggleDay(day)}
+                  >
+                    <Text style={[styles.dayText, isSelected ? styles.dayTextSelected : styles.dayTextUnselected]}>
+                      {day}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* SALARY / RATE */}
+          <View style={styles.formGroup}>
+            <View style={styles.labelRowWithDuration}>
+              <Text style={styles.fieldLabel}>
+                {selectedBookingType === 'short_term' ? 'RATE (PER DAY / SHORT-TERM)' : 'MONTHLY SALARY'}
+              </Text>
+              {effectiveJobPost?.rate ? (
+                <Text style={styles.autoFilledHint}>Auto-filled from job</Text>
+              ) : null}
+            </View>
+            <View style={[styles.inputBox, isBelowMinWage && styles.inputBoxInvalid]}>
+              <Text style={[styles.currencyPrefix, isBelowMinWage && styles.currencyPrefixInvalid]}>₱ </Text>
+              <TextInput
+                style={[styles.inputText, { flex: 1 }, isBelowMinWage && styles.inputTextInvalid]}
+                value={salary}
+                onChangeText={setSalary}
+                editable={!readOnly}
+                keyboardType="numeric"
+                placeholder={selectedBookingType === 'short_term' ? '600' : '6500'}
+                placeholderTextColor={isBelowMinWage ? '#FCA5A5' : '#999'}
+              />
+              <Text style={[styles.rateUnitSuffix, isBelowMinWage && styles.rateUnitSuffixInvalid]}>
+                {selectedBookingType === 'short_term' ? '/day' : '/month'}
+              </Text>
+            </View>
+            {isBelowMinWage && (
+              <Text style={styles.invalidRateHint}>
+                {selectedBookingType === 'short_term'
+                  ? 'Minimum rate is ₱600 / day'
+                  : 'Minimum salary is ₱6,500 / month'}
+              </Text>
+            )}
+          </View>
+        </ScrollView>
+
+        {/* Action Button Footer */}
+        <View style={styles.footerContainer}>
           {readOnly ? (
-            userRole === 'kasambahay' && !isConfirmed ? (
+            isKasambahayUser && !isConfirmed ? (
               <Pressable
-                style={({ pressed }) => [styles.confirmBtn, pressed && styles.pressedBtn]}
+                style={({ pressed }) => [styles.agreeBtn, pressed && styles.pressedBtn]}
                 onPress={() => {
                   onKasambahayConfirm?.();
-                  onClose();
+                  handleClose();
                 }}
               >
-                <Text style={styles.confirmBtnText}>Confirm Booking ➔</Text>
+                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.agreeBtnText}>Agree & Accept Booking</Text>
               </Pressable>
             ) : isConfirmed ? (
               <View style={styles.confirmedBanner}>
@@ -467,15 +634,20 @@ export function BookingModal({
               style={({ pressed }) => [styles.confirmBtn, pressed && styles.pressedBtn]}
               onPress={handleConfirm}
             >
-              <Text style={styles.confirmBtnText}>Confirm</Text>
+              <Text style={styles.confirmBtnText}>Confirm Booking ➔</Text>
             </Pressable>
           )}
         </View>
-      </View>
+      </Animated.View>
 
       {/* Interactive Calendar Month Date Picker Modal */}
       {!readOnly && (
-        <Modal visible={datePickerTarget !== null} transparent animationType="fade" onRequestClose={() => setDatePickerTarget(null)}>
+        <Modal
+          visible={datePickerTarget !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDatePickerTarget(null)}
+        >
           <Pressable style={styles.modalOverlay} onPress={() => setDatePickerTarget(null)}>
             <Pressable style={styles.calendarCard} onPress={(e) => e.stopPropagation()}>
               <Text style={styles.calendarHeaderTitle}>
@@ -516,36 +688,41 @@ export function BookingModal({
                 </Pressable>
               </View>
 
+              {/* Weekday Header */}
               <View style={styles.weekdayRow}>
                 {WEEKDAY_HEADER.map((w) => (
-                  <Text key={w} style={styles.weekdayLabel}>{w}</Text>
+                  <Text key={w} style={styles.weekdayText}>
+                    {w}
+                  </Text>
                 ))}
               </View>
 
+              {/* Calendar Days Grid */}
               <View style={styles.calendarGrid}>
-                {Array.from({ length: firstDayIndex }).map((_, idx) => (
-                  <View key={`empty-${idx}`} style={styles.calendarDaySlot} />
+                {Array.from({ length: firstDayIndex }).map((_, i) => (
+                  <View key={`empty-${i}`} style={styles.calendarCell} />
                 ))}
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                  const dayNum = i + 1;
+                  const formattedMonth = (calendarMonth + 1).toString().padStart(2, '0');
+                  const formattedDay = dayNum.toString().padStart(2, '0');
+                  const thisDateStr = `${formattedMonth}/${formattedDay}/${calendarYear}`;
+                  const isSelected =
+                    datePickerTarget === 'start' ? startDate === thisDateStr : endDate === thisDateStr;
 
-                {Array.from({ length: daysInMonth }).map((_, idx) => {
-                  const dayNum = idx + 1;
                   return (
                     <Pressable
                       key={`day-${dayNum}`}
-                      style={styles.calendarDaySlot}
+                      style={[styles.calendarCell, isSelected && styles.calendarCellSelected]}
                       onPress={() => handleSelectDate(dayNum)}
                     >
-                      <View style={styles.calendarDayCircle}>
-                        <Text style={styles.calendarDayText}>{dayNum}</Text>
-                      </View>
+                      <Text style={[styles.calendarCellText, isSelected && styles.calendarCellTextSelected]}>
+                        {dayNum}
+                      </Text>
                     </Pressable>
                   );
                 })}
               </View>
-
-              <Pressable style={styles.closePickerBtn} onPress={() => setDatePickerTarget(null)}>
-                <Text style={styles.closePickerText}>Cancel</Text>
-              </Pressable>
             </Pressable>
           </Pressable>
         </Modal>
@@ -553,7 +730,12 @@ export function BookingModal({
 
       {/* Interactive Time Picker Selector Modal */}
       {!readOnly && (
-        <Modal visible={showTimePicker} transparent animationType="fade" onRequestClose={() => setShowTimePicker(false)}>
+        <Modal
+          visible={showTimePicker}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowTimePicker(false)}
+        >
           <Pressable style={styles.modalOverlay} onPress={() => setShowTimePicker(false)}>
             <Pressable style={styles.timeCard} onPress={(e) => e.stopPropagation()}>
               <Text style={styles.pickerTitle}>Set Work Hours</Text>
@@ -563,7 +745,7 @@ export function BookingModal({
                 <View style={styles.timeGroup}>
                   <Text style={styles.timeSubLabel}>Hour</Text>
                   <View style={styles.timePillsScroll}>
-                    {['07', '08', '09', '10', '11', '12'].map((h) => (
+                    {['06', '07', '08', '09', '10', '11', '12'].map((h) => (
                       <Pressable
                         key={h}
                         style={[styles.timeChip, startHour === h && styles.timeChipActive]}
@@ -591,12 +773,12 @@ export function BookingModal({
                 </View>
               </View>
 
-              <Text style={[styles.timeSectionLabel, { marginTop: 12 }]}>END TIME</Text>
+              <Text style={[styles.timeSectionLabel, { marginTop: 14 }]}>END TIME</Text>
               <View style={styles.timeSelectorRow}>
                 <View style={styles.timeGroup}>
                   <Text style={styles.timeSubLabel}>Hour</Text>
                   <View style={styles.timePillsScroll}>
-                    {['04', '05', '06', '07', '08'].map((h) => (
+                    {['03', '04', '05', '06', '07', '08', '09'].map((h) => (
                       <Pressable
                         key={h}
                         style={[styles.timeChip, endHour === h && styles.timeChipActive]}
@@ -611,7 +793,7 @@ export function BookingModal({
                 <View style={styles.timeGroup}>
                   <Text style={styles.timeSubLabel}>AM/PM</Text>
                   <View style={styles.timePillsScroll}>
-                    {['PM', 'AM'].map((ap) => (
+                    {['AM', 'PM'].map((ap) => (
                       <Pressable
                         key={ap}
                         style={[styles.timeChip, endAmpm === ap && styles.timeChipActive]}
@@ -624,14 +806,9 @@ export function BookingModal({
                 </View>
               </View>
 
-              <View style={styles.timeActionRow}>
-                <Pressable style={styles.cancelTimeBtn} onPress={() => setShowTimePicker(false)}>
-                  <Text style={styles.cancelTimeText}>Cancel</Text>
-                </Pressable>
-                <Pressable style={styles.saveTimeBtn} onPress={handleConfirmTime}>
-                  <Text style={styles.saveTimeText}>Set Time</Text>
-                </Pressable>
-              </View>
+              <Pressable style={styles.confirmTimeBtn} onPress={handleConfirmTime}>
+                <Text style={styles.confirmTimeBtnText}>Done</Text>
+              </Pressable>
             </Pressable>
           </Pressable>
         </Modal>
@@ -649,44 +826,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    width: '100%',
-    marginBottom: 6,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBE9E4',
+    backgroundColor: '#F6F5F2',
   },
-  headerSide: {
-    width: 44,
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  headerSideRight: {
-    alignItems: 'flex-end',
+  headerTitleCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#000000',
-    flex: 1,
-    marginLeft: 8,
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    fontFamily: THEME.typography.fontFamily.display,
+  },
+  headerRight: {
+    width: 40,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   logo: {
-    height: 44,
-    width: 44,
+    height: 34,
+    width: 34,
   },
-  contentBody: {
+  scrollView: {
     flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: 'space-between',
-    paddingBottom: 4,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   workerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
-    marginBottom: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   workerAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     marginRight: 12,
   },
   workerTextCol: {
@@ -695,160 +890,373 @@ const styles = StyleSheet.create({
   workerNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
   },
   workerName: {
     fontSize: 16,
     fontWeight: '800',
     color: '#1A1A1A',
   },
-  longTermTag: {
-    marginLeft: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  longTermText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#FFA51F',
-  },
   workerSubRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 1,
+    marginTop: 3,
   },
-  kasambahayText: {
+  kasambahaySub: {
+    fontSize: 12.5,
+    color: '#666',
+    fontWeight: '500',
+  },
+  metaDot: {
+    marginHorizontal: 6,
+    color: '#A0A0A0',
     fontSize: 12,
-    color: '#888888',
-    marginRight: 8,
   },
-  cleanerTag: {
-    backgroundColor: '#9353FF',
-    paddingHorizontal: 12,
-    paddingVertical: 2,
-    borderRadius: 12,
+  termBadgeSmall: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 10,
   },
-  cleanerTagText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
+  termBadgeShort: {
+    backgroundColor: '#FEF3C7',
   },
-  formSection: {
-    flex: 1,
-    justifyContent: 'space-evenly',
+  termBadgeLong: {
+    backgroundColor: '#EFF6FF',
+  },
+  termBadgeSmallText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  termBadgeShortText: {
+    color: '#D97706',
+  },
+  termBadgeLongText: {
+    color: '#2563EB',
   },
   formGroup: {
-    marginBottom: 4,
+    marginBottom: 16,
   },
   fieldLabel: {
-    fontSize: 9.5,
+    fontSize: 11,
     fontWeight: '800',
-    color: '#444444',
-    letterSpacing: 0.8,
-    marginBottom: 2,
+    color: '#6B7280',
+    letterSpacing: 0.6,
+    marginBottom: 6,
   },
-  inputBox: {
+  labelRowWithDuration: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  autoFilledHint: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  durationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'transparent',
-    paddingHorizontal: 16,
-    height: 28,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
-  inputText: {
+  durationBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  typePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  typePillActive: {
+    backgroundColor: '#FFA51F',
+  },
+  typePillInactive: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  typePillText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  typePillTextActive: {
+    color: '#FFFFFF',
+  },
+  typePillTextInactive: {
+    color: '#555555',
+  },
+  termReadonlyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  termReadonlyShort: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  termReadonlyLong: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  termReadonlyTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  termReadonlySub: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 1,
+  },
+  dateRangeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+  },
+  dateRangeBox: {
+    flex: 1,
+    backgroundColor: '#F9F8F6',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  dateRangeSubLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#8E8E93',
+    letterSpacing: 0.5,
+  },
+  dateValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginTop: 2,
+  },
+  dateValueText: {
     fontSize: 13.5,
     fontWeight: '700',
     color: '#1A1A1A',
-    padding: 0,
-    flex: 1,
   },
-  currencyPrefix: {
-    fontSize: 13,
-    fontWeight: '700',
+  dateArrowContainer: {
+    paddingHorizontal: 8,
+  },
+  inputBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+  },
+  inputBoxInvalid: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  inputText: {
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '600',
     color: '#1A1A1A',
   },
-  warningText: {
-    fontSize: 8.5,
-    color: '#FFA51F',
-    marginTop: 2,
-    lineHeight: 11,
+  inputTextInvalid: {
+    color: '#DC2626',
+  },
+  currencyPrefix: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    marginRight: 4,
+  },
+  currencyPrefixInvalid: {
+    color: '#DC2626',
+  },
+  rateUnitSuffix: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#8E8E93',
+    marginLeft: 6,
+  },
+  rateUnitSuffixInvalid: {
+    color: '#DC2626',
+  },
+  invalidRateHint: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+    marginTop: 5,
+    paddingHorizontal: 2,
   },
   daysRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 1,
   },
   dayPill: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dayPillSelected: {
-    backgroundColor: '#FFB43B',
+    backgroundColor: '#FFA51F',
   },
   dayPillUnselected: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#CCCCCC',
+    borderColor: '#EAEAEA',
   },
   dayText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
   },
   dayTextSelected: {
     color: '#FFFFFF',
   },
   dayTextUnselected: {
-    color: '#555555',
+    color: '#4B5563',
   },
-  scopeGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 2,
-  },
-  scopeCol: {
-    flex: 1,
-    gap: 4,
-  },
-  checkboxRow: {
+  jobRefHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    marginBottom: 6,
   },
-  checkboxLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+  jobPostCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+  },
+  jobPostTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  jobPostRoleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  jobPostRoleText: {
+    fontSize: 14,
+    fontWeight: '800',
     color: '#1A1A1A',
   },
+  termPillClean: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  termPillCleanShort: {
+    backgroundColor: '#FFFBEB',
+  },
+  termPillCleanLong: {
+    backgroundColor: '#EFF6FF',
+  },
+  termPillCleanText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  termPillCleanTextShort: {
+    color: '#D97706',
+  },
+  termPillCleanTextLong: {
+    color: '#2563EB',
+  },
+  jobPostDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9F8F6',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  jobPostMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  jobPostMetaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4B5563',
+    marginLeft: 4,
+  },
+  footerContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 4,
+    backgroundColor: '#F6F5F2',
+  },
   confirmBtn: {
-    backgroundColor: '#FFB43B',
-    borderRadius: 8,
-    height: 42,
+    backgroundColor: '#FFA51F',
+    borderRadius: 24,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
-  },
-  pressedBtn: {
-    opacity: 0.85,
+    shadowColor: '#FFA51F',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 3,
   },
   confirmBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
   },
+  agreeBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#059669',
+    borderRadius: 24,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  agreeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  pressedBtn: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
   confirmedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E8F5E9',
-    borderRadius: 8,
-    height: 42,
-    marginTop: 4,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   confirmedBannerText: {
-    color: '#2E7D32',
+    color: '#047857',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -856,29 +1264,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF5E5',
-    borderRadius: 8,
-    height: 42,
-    marginTop: 4,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
   pendingBannerText: {
-    color: '#D97706',
+    color: '#B45309',
     fontSize: 13,
     fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    alignItems: 'center',
+    padding: 24,
   },
   calendarCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    width: '92%',
-    elevation: 6,
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    maxWidth: 340,
+    elevation: 5,
   },
   calendarHeaderTitle: {
     fontSize: 16,
@@ -891,59 +1301,56 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
     marginBottom: 12,
   },
   monthNavText: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 14.5,
+    fontWeight: '700',
     color: '#1A1A1A',
   },
   weekdayRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
-    paddingBottom: 6,
   },
-  weekdayLabel: {
-    width: 32,
-    textAlign: 'center',
+  weekdayText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#888',
+    color: '#8E8E93',
+    width: 36,
+    textAlign: 'center',
   },
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-start',
   },
-  calendarDaySlot: {
-    width: '14.28%',
+  calendarCell: {
+    width: `${100 / 7}%`,
     height: 38,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 19,
+    marginVertical: 2,
   },
-  calendarDayCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#F6F5F2',
-    alignItems: 'center',
-    justifyContent: 'center',
+  calendarCellSelected: {
+    backgroundColor: '#FFA51F',
   },
-  calendarDayText: {
-    fontSize: 12,
-    fontWeight: '700',
+  calendarCellText: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#1A1A1A',
+  },
+  calendarCellTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
   timeCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
-    width: '90%',
-    elevation: 6,
+    width: '100%',
+    maxWidth: 320,
+    elevation: 5,
   },
   pickerTitle: {
     fontSize: 16,
@@ -953,23 +1360,23 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   timeSectionLabel: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '800',
-    color: '#444',
-    letterSpacing: 0.8,
+    color: '#8E8E93',
+    letterSpacing: 0.6,
     marginBottom: 6,
   },
   timeSelectorRow: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    gap: 10,
   },
   timeGroup: {
     flex: 1,
   },
   timeSubLabel: {
-    fontSize: 10,
-    color: '#777',
+    fontSize: 11,
+    color: '#666',
     marginBottom: 4,
   },
   timePillsScroll: {
@@ -979,12 +1386,12 @@ const styles = StyleSheet.create({
   },
   timeChip: {
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#F6F5F2',
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
   },
   timeChipActive: {
-    backgroundColor: '#FFB43B',
+    backgroundColor: '#FFA51F',
   },
   timeChipText: {
     fontSize: 12,
@@ -994,41 +1401,16 @@ const styles = StyleSheet.create({
   timeChipTextActive: {
     color: '#FFFFFF',
   },
-  timeActionRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 16,
+  confirmTimeBtn: {
+    backgroundColor: '#FFA51F',
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 18,
   },
-  cancelTimeBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  cancelTimeText: {
-    color: '#777',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  saveTimeBtn: {
-    backgroundColor: '#FFB43B',
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    borderRadius: 8,
-  },
-  saveTimeText: {
+  confirmTimeBtnText: {
     color: '#FFFFFF',
     fontWeight: '800',
-    fontSize: 13,
-  },
-  closePickerBtn: {
-    marginTop: 14,
-    alignSelf: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-  },
-  closePickerText: {
-    color: '#888',
-    fontWeight: '700',
-    fontSize: 13,
+    fontSize: 14,
   },
 });

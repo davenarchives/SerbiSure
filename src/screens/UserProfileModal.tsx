@@ -15,6 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchPublicProfile, PublicProfile } from '../api/accountApi';
 import { fetchReviewSummary, fetchUserReviews, ReviewItem, ReviewSummaryData } from '../api/reviewApi';
+import { formatRegisteredLocation } from '../services/locationService';
+import THEME from '../config/theme';
 
 export interface UserProfileModalProps {
   visible: boolean;
@@ -102,7 +104,7 @@ export function UserProfileModal({
     };
   }, [visible, userId, token]);
 
-  const locationText = [profile?.city, profile?.province].filter(Boolean).join(', ') || 'Philippines';
+  const locationText = formatRegisteredLocation(profile?.street, profile?.city, profile?.province);
   const memberSince = formatMemberSince(profile?.date_joined);
   const isVerified = profile?.verification_status === 'Verified';
 
@@ -129,97 +131,85 @@ export function UserProfileModal({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Profile Hero Card */}
+          {/* Profile Hero Card (Clean Rounded Peach Neo-Pop Card) */}
           <View style={styles.heroCard}>
             <View style={styles.avatarContainer}>
               <Image source={{ uri: activeAvatar }} style={styles.avatarImage} />
+            </View>
+
+            <View style={styles.nameRow}>
+              <Text style={styles.profileName}>{displayName}</Text>
               {isVerified && (
-                <View style={styles.verifiedCheckBadge}>
-                  <Ionicons name="checkmark-circle" size={20} color="#2196F3" />
-                </View>
+                <Ionicons name="checkmark-circle" size={20} color="#10B981" style={{ marginLeft: 6 }} />
               )}
             </View>
 
-            <Text style={styles.profileName}>{displayName}</Text>
+            <Text style={styles.heroSubRoleText}>{displayRole}</Text>
 
-            <View style={styles.badgeRow}>
-              <View style={styles.roleBadge}>
-                <Ionicons
-                  name={displayRole.toLowerCase().includes('kasambahay') ? 'briefcase-outline' : 'home-outline'}
-                  size={13}
-                  color="#FFB43B"
-                  style={{ marginRight: 4 }}
-                />
-                <Text style={styles.roleBadgeText}>{displayRole}</Text>
-              </View>
-
-              <View style={[styles.statusBadge, isVerified ? styles.statusBadgeVerified : styles.statusBadgePending]}>
-                <Text style={[styles.statusBadgeText, isVerified ? styles.statusTextVerified : styles.statusTextPending]}>
-                  {profile?.verification_status || 'Active Member'}
-                </Text>
-              </View>
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={14} color="#6B7280" />
+              <Text style={styles.locationText}>{locationText}</Text>
             </View>
 
-            <View style={styles.metaRow}>
-              <View style={styles.metaItem}>
-                <Ionicons name="location-outline" size={14} color="#777" />
-                <Text style={styles.metaText}>{locationText}</Text>
-              </View>
-              {memberSince ? (
-                <View style={styles.metaItem}>
-                  <Ionicons name="calendar-outline" size={14} color="#777" />
-                  <Text style={styles.metaText}>{memberSince}</Text>
-                </View>
-              ) : null}
-              {profile?.contact_number ? (
-                <Pressable
-                  style={styles.metaItem}
-                  onPress={() => profile.contact_number && Linking.openURL(`tel:${profile.contact_number}`)}
-                >
-                  <Ionicons name="call-outline" size={14} color="#059669" />
-                  <Text style={[styles.metaText, { color: '#059669', fontWeight: '600' }]}>
-                    {profile.contact_number}
-                  </Text>
-                </Pressable>
-              ) : (
-                <View style={styles.metaItem}>
-                  <Ionicons name="eye-off-outline" size={13} color="#9CA3AF" />
-                  <Text style={[styles.metaText, { color: '#9CA3AF', fontStyle: 'italic' }]}>
-                    Phone Private
-                  </Text>
-                </View>
-              )}
-            </View>
+            {profile?.contact_number ? (
+              <Pressable
+                style={styles.contactRow}
+                onPress={() => profile.contact_number && Linking.openURL(`tel:${profile.contact_number}`)}
+              >
+                <Ionicons name="call" size={13} color="#9CA3AF" />
+                <Text style={styles.contactText}>{profile.contact_number}</Text>
+              </Pressable>
+            ) : null}
 
-            {/* Client Sentiment Bar */}
+            {/* Separator Line */}
+            <View style={styles.heroDividerLine} />
+
+            {/* Worker / Client Sentiment Track */}
             <View style={styles.sentimentCard}>
-              <View style={styles.sentimentHeaderRow}>
-                <Text style={styles.sentimentTitle}>Rating & Sentiment</Text>
-                <View style={styles.starSummaryRow}>
-                  <Ionicons name="star" size={15} color="#FFB43B" />
-                  <Text style={styles.starSummaryScore}>{averageRating}</Text>
-                  <Text style={styles.starSummaryCount}>({totalReviews} {totalReviews === 1 ? 'review' : 'reviews'})</Text>
-                </View>
+              <Text style={styles.sentimentLabel}>
+                {displayRole.toLowerCase().includes('kasambahay') ? 'Client Sentiment' : 'Worker Sentiment'}
+              </Text>
+              <View style={styles.sentimentTrack}>
+                <View
+                  style={[
+                    styles.sentimentFill,
+                    {
+                      width: `${totalReviews > 0 ? Math.min(100, Math.max(10, positivePercentage)) : 0}%`,
+                      backgroundColor: totalReviews > 0 ? '#22C55E' : '#E5E7EB',
+                    },
+                  ]}
+                />
               </View>
-
-              <View style={styles.sentimentBarRow}>
-                <View style={styles.sentimentTrack}>
-                  <View style={[styles.sentimentFill, { width: `${Math.min(100, Math.max(12, positivePercentage))}%` }]} />
-                </View>
-                <Text style={styles.sentimentPct}>{positivePercentage}% Positive</Text>
-              </View>
+              <Text style={[styles.sentimentScore, totalReviews === 0 && { color: '#9CA3AF' }]}>
+                {totalReviews > 0 ? `${positivePercentage}% Positive` : 'No reviews yet'}
+              </Text>
             </View>
 
             {/* Tags Pill Row */}
             {profile?.user_tags && profile.user_tags.length > 0 ? (
-              <View style={styles.tagsRow}>
+              <View style={styles.heroTagsWrap}>
                 {profile.user_tags.map((tag, idx) => (
-                  <View key={`${tag}-${idx}`} style={styles.tagPill}>
-                    <Text style={styles.tagPillText}>{tag}</Text>
+                  <View key={`${tag}-${idx}`} style={styles.heroTagPill}>
+                    <Text style={styles.heroTagPillText}>{tag}</Text>
                   </View>
                 ))}
               </View>
             ) : null}
+          </View>
+
+          {/* About / Bio Section */}
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionHeading}>About</Text>
+            {loading && !profile ? (
+              <ActivityIndicator size="small" color="#FFB43B" style={{ alignSelf: 'flex-start', marginVertical: 8 }} />
+            ) : profile?.user_about && profile.user_about !== 'No Bio' && profile.user_about.trim() !== '' ? (
+              <Text style={styles.bioText}>{profile.user_about}</Text>
+            ) : (
+              <View style={styles.emptyBioRow}>
+                <Ionicons name="information-circle-outline" size={18} color="#9E9E9E" />
+                <Text style={styles.emptyBioText}>No bio provided yet.</Text>
+              </View>
+            )}
           </View>
 
           {/* Resume / CV Section (for Kasambahay) */}
@@ -240,21 +230,6 @@ export function UserProfileModal({
               </View>
             </View>
           ) : null}
-
-          {/* About / Bio Section */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionHeading}>About</Text>
-            {loading && !profile ? (
-              <ActivityIndicator size="small" color="#FFB43B" style={{ alignSelf: 'flex-start', marginVertical: 8 }} />
-            ) : profile?.user_about && profile.user_about !== 'No Bio' && profile.user_about.trim() !== '' ? (
-              <Text style={styles.bioText}>{profile.user_about}</Text>
-            ) : (
-              <View style={styles.emptyBioRow}>
-                <Ionicons name="information-circle-outline" size={18} color="#9E9E9E" />
-                <Text style={styles.emptyBioText}>No bio provided yet.</Text>
-              </View>
-            )}
-          </View>
 
           {/* Social Links & Alternative Contacts Section */}
           {profile?.social_links && profile.social_links.length > 0 ? (
@@ -401,6 +376,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 17,
     fontWeight: '700',
     color: '#1A1A1A',
@@ -413,179 +389,136 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   heroCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 20,
-    alignItems: 'center',
+    backgroundColor: '#FFE9D5',
+    borderRadius: 32,
+    paddingHorizontal: 22,
+    paddingBottom: 22,
+    paddingTop: 18,
+    marginTop: 38,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    alignItems: 'flex-start',
   },
   avatarContainer: {
     position: 'relative',
+    alignSelf: 'flex-start',
+    marginTop: -48,
+    marginLeft: 2,
     marginBottom: 12,
   },
   avatarImage: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 4,
+    borderColor: '#FFE9D5',
     backgroundColor: '#F3F4F6',
-    borderWidth: 3,
-    borderColor: '#FFB43B',
   },
-  verifiedCheckBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    alignSelf: 'flex-start',
+    marginBottom: 2,
   },
   profileName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 6,
-    textAlign: 'center',
+    fontFamily: THEME.typography.fontFamily.mainExtraBold,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0D0D11',
+    textAlign: 'left',
   },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  roleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF8EC',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FFE2B3',
-  },
-  roleBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#D97706',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusBadgeVerified: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  statusBadgePending: {
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  statusTextVerified: {
-    color: '#2563EB',
-  },
-  statusTextPending: {
+  heroSubRoleText: {
+    fontFamily: THEME.typography.fontFamily.secondaryMedium,
+    fontSize: 14,
+    fontWeight: '500',
     color: '#6B7280',
+    marginBottom: 4,
+    textAlign: 'left',
+    alignSelf: 'flex-start',
   },
-  metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 14,
-    marginTop: 4,
-    marginBottom: 14,
-  },
-  metaItem: {
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 4,
+    marginBottom: 10,
   },
-  metaText: {
+  locationText: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 13,
-    color: '#6B7280',
+    color: '#4B5563',
+    fontWeight: '500',
+    textAlign: 'left',
+  },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  contactText: {
+    fontFamily: THEME.typography.fontFamily.secondaryMedium,
+    fontSize: 12.5,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  heroDividerLine: {
+    width: '100%',
+    height: 1,
+    backgroundColor: 'rgba(217, 119, 6, 0.25)',
+    marginVertical: 12,
   },
   sentimentCard: {
     width: '100%',
-    backgroundColor: '#FBFBFC',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginTop: 4,
-  },
-  sentimentHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  sentimentTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  starSummaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    marginBottom: 12,
   },
-  starSummaryScore: {
-    fontSize: 13,
+  sentimentLabel: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
+    fontSize: 13.5,
     fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  starSummaryCount: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  sentimentBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    color: '#0D0D11',
+    marginRight: 8,
   },
   sentimentTrack: {
     flex: 1,
-    height: 6,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 3,
+    height: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    borderRadius: 9999,
     overflow: 'hidden',
   },
   sentimentFill: {
     height: '100%',
-    backgroundColor: '#10B981',
-    borderRadius: 3,
+    borderRadius: 9999,
   },
-  sentimentPct: {
+  sentimentScore: {
+    fontFamily: THEME.typography.fontFamily.secondaryBold,
     fontSize: 12,
-    fontWeight: '600',
-    color: '#10B981',
+    fontWeight: '700',
+    color: '#16A34A',
+    marginLeft: 8,
   },
-  tagsRow: {
+  heroTagsWrap: {
+    width: '100%',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'center',
-    marginTop: 14,
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginTop: 4,
   },
-  tagPill: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+  heroTagPill: {
+    backgroundColor: '#FFAC59',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 9999,
   },
-  tagPillText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#4B5563',
+  heroTagPillText: {
+    fontFamily: THEME.typography.fontFamily.mainExtraBold,
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '800',
   },
   sectionContainer: {
     backgroundColor: '#FFFFFF',
@@ -599,12 +532,14 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   sectionHeading: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 15,
     fontWeight: '700',
     color: '#1A1A1A',
     marginBottom: 10,
   },
   bioText: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 14,
     lineHeight: 21,
     color: '#4B5563',
@@ -616,6 +551,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   emptyBioText: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 13,
     color: '#9CA3AF',
     fontStyle: 'italic',
@@ -627,6 +563,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   reviewCountBadge: {
+    fontFamily: THEME.typography.fontFamily.secondaryBold,
     fontSize: 12,
     fontWeight: '600',
     color: '#FFB43B',
@@ -660,11 +597,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   sentimentChipText: {
+    fontFamily: THEME.typography.fontFamily.secondaryBold,
     fontSize: 11,
     fontWeight: '600',
     color: '#059669',
   },
   reviewFeedback: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 13,
     lineHeight: 18,
     color: '#374151',
@@ -677,11 +616,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   reviewerName: {
+    fontFamily: THEME.typography.fontFamily.secondaryMedium,
     fontSize: 12,
     fontWeight: '600',
     color: '#6B7280',
   },
   reviewDate: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 11,
     color: '#9CA3AF',
   },
@@ -691,12 +632,14 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
   },
   emptyReviewsTitle: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
     marginTop: 8,
   },
   emptyReviewsSubtitle: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 12,
     color: '#9CA3AF',
     textAlign: 'center',
@@ -720,6 +663,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   messageBtnText: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
@@ -740,6 +684,7 @@ const styles = StyleSheet.create({
     borderColor: '#FFE2B8',
   },
   viewResumeBtnText: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 12,
     fontWeight: '700',
     color: '#333',
@@ -765,11 +710,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   socialPlatformName: {
+    fontFamily: THEME.typography.fontFamily.mainBold,
     fontSize: 13,
     fontWeight: '600',
     color: '#1F2937',
   },
   socialHandleText: {
+    fontFamily: THEME.typography.fontFamily.secondary,
     fontSize: 12,
     color: '#6B7280',
     marginTop: 1,

@@ -23,6 +23,7 @@ const logoSource = require('../../assets/serbisure_new_clean.png');
 const faceSource = require('../../assets/face-placeholder.png');
 
 type LivenessScreenProps = {
+  role?: 'homeowner' | 'kasambahay';
   token?: string | null;
   onVerified?: (result: LivenessResult) => void;
   onBack?: () => void;
@@ -120,7 +121,7 @@ function getInstruction(state: LivenessState, showTrackerNotice: boolean, countd
   return 'Face forward and stay still';
 }
 
-export function LivenessScreen({ token, onVerified, onBack, onCancel, onSkip }: LivenessScreenProps) {
+export function LivenessScreen({ role = 'homeowner', token, onVerified, onBack, onCancel, onSkip }: LivenessScreenProps) {
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<FaceCameraHandle | null>(null);
   const captureStartedRef = useRef(false);
@@ -275,8 +276,9 @@ export function LivenessScreen({ token, onVerified, onBack, onCancel, onSkip }: 
 
       <View style={styles.card}>
         <RegistrationStepper
-          currentStep={3}
-          title="Step 3: Face Verification"
+          currentStep={role === 'kasambahay' ? 4 : 3}
+          totalSteps={role === 'kasambahay' ? 5 : 4}
+          title={role === 'kasambahay' ? 'Step 4: Face Verification' : 'Step 3: Face Verification'}
           help="Position your face within the circle in a well-lit area."
         />
 

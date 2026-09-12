@@ -33,7 +33,7 @@ interface VerificationStatusModalProps {
 const DOCUMENT_NAMES: Record<string, string> = {
   nbi_clearance: 'NBI Clearance',
   police_clearance: 'Police Clearance',
-  national_id_front: 'National ID (Front)',
+  national_id_front: 'National ID',
   national_id_back: 'National ID (Back)',
 };
 
@@ -243,7 +243,7 @@ export function VerificationStatusModal({
   const needsNbi = effectiveRole === 'kasambahay' && (!activeTypes.has('nbi_clearance') || !!nbiImage);
   const needsPolice = effectiveRole === 'kasambahay' && (!activeTypes.has('police_clearance') || !!policeImage);
   const needsFront = effectiveRole === 'homeowner' && (!activeTypes.has('national_id_front') || !!nationalFrontImage);
-  const needsBack = effectiveRole === 'homeowner' && (!activeTypes.has('national_id_back') || !!nationalBackImage);
+  const needsBack = false;
 
   const hasAnyNeeds = needsNbi || needsPolice || needsFront || needsBack;
   const hasAnySelected = !!(nbiImage || policeImage || nationalFrontImage || nationalBackImage);
@@ -337,7 +337,7 @@ export function VerificationStatusModal({
       );
 
       if (statusData.account_type === 'Homeowner') {
-        if (verifiedTypes.has('national_id_front') && verifiedTypes.has('national_id_back')) {
+        if (verifiedTypes.has('national_id_front')) {
           return 'Verified';
         }
       } else if (statusData.account_type === 'Kasambahay') {
@@ -793,7 +793,7 @@ export function VerificationStatusModal({
 
         {needsFront ? (
           <UploadBox
-            title="National ID (Front)"
+            title="National ID"
             subtitle="Tap or upload image"
             image={nationalFrontImage}
             defaultFilename="national_id_front.jpg"
